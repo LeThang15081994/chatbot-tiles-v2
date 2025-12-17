@@ -1,0 +1,80 @@
+# =========================
+# LOG CONFIG
+# =========================
+log:
+  level: info
+  console: true
+  file:
+    filename: "logs/backup.log"
+
+http:
+  simpleResponse: true
+
+# =========================
+# MILVUS CONFIG
+# =========================
+milvus:
+  address: milvus-standalone
+  port: 19530
+  user: "root"
+  password: "Milvus"
+
+  tlsMode: 0
+
+  # etcd config (same network)
+  etcd:
+    endpoints: milvus-etcd:2379
+    rootPath: "by-dev"
+
+# =========================
+# MINIO CONFIG
+# =========================
+minio:
+  # ---- DATA STORAGE  ----
+  storageType: "minio"
+  address: milvus-minio
+  port: 9000
+  region: ""
+  accessKeyID: minioadmin
+  secretAccessKey: minioadmin
+  useSSL: false
+  useIAM: false
+
+  bucketName: "milvus-data"   # ⬅ DATA BUCKET
+  rootPath: "files"
+
+  # ---- BACKUP STORAGE ----
+  backupStorageType: "minio"
+  backupAddress: milvus-minio
+  backupPort: 9000
+  backupRegion: ""
+  backupAccessKeyID: minioadmin
+  backupSecretAccessKey: minioadmin
+  backupUseSSL: false
+
+  backupBucketName: "milvus-backup"   # ⬅ BACKUP BUCKET
+  backupRootPath: "backup"
+
+  # DATA & BACKUP cùng MinIO instance
+  crossStorage: "false"
+
+# =========================
+# BACKUP BEHAVIOR
+# =========================
+backup:
+  parallelism:
+    # IO copy – giảm nếu disk yếu
+    copydata: 32
+
+    # số collection backup song song
+    backupCollection: 2
+
+    # restore song song
+    restoreCollection: 1
+
+  keepTempFiles: false
+
+  # Pause GC để tránh mất segment khi backup
+  gcPause:
+    enable: true
+    address: http://milvus-standalone:9091
