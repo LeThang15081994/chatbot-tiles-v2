@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # ONNX Runtime Backend (Optimized)
+  triton-onnx:
+    image: nvcr.io/nvidia/tritonserver:24.01-py3
+    container_name: triton-embedding-onnx
+    command: |
+      tritonserver
+      --model-repository=/models
+      --log-verbose=1
+      --strict-model-config=false
+      --backend-config=onnxruntime,default-max-batch-size=32
+    ports:
+      - "7000:8000"  # HTTP
+      - "7001:8001"  # gRPC
+      - "7002:8002"  # Metrics
+    volumes:
+      - ./model_repository:/models
+    environment:
+      - CUDA_VISIBLE_DEVICES=  # Empty for CPU-only
+      # For GPU: CUDA_VISIBLE_DEVICES=0
+      - OMP_NUM_THREADS=4
+      - MKL_NUM_THREADS=4
+    shm_size: 2g
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7000/v2/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+    # For GPU deployment, uncomment:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+networks:
+  default:
+    name: triton-onnx-network
+
