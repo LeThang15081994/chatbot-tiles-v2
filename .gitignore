@@ -4,7 +4,7 @@ db/milvus/volumes/
 db/milvus/schema_image_search/
 db/milvus/schema_chatbot/
 db/postgreSQL/volumes/
-mlops/triton/model_repository/embeddings_onnx/1/
+mlops/triton/model_repository/
 *.tar
 *.zip
 # Ignore credentials
