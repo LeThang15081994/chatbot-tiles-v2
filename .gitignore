@@ -1,6 +1,10 @@
 chatbot-ceramic-tiles/
 # Ignore data directories
-db/milvus/volumes
+db/milvus/volumes/
+db/milvus/schema_image_search/
+db/milvus/schema_chatbot/
+db/postgreSQL/volumes/
+mlops/triton/model_repository/embeddings_onnx/1/
 *.tar
 *.zip
 # Ignore credentials
