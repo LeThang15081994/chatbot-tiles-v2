@@ -16,7 +16,7 @@ services:
       - "7001:8001"  # gRPC
       - "7002:8002"  # Metrics
     volumes:
-      - ./model_repository:/models
+      - ./model_repository/chatbot:/models
     environment:
       - CUDA_VISIBLE_DEVICES=  # Empty for CPU-only
       # For GPU: CUDA_VISIBLE_DEVICES=0
@@ -26,6 +26,8 @@ services:
     ulimits:
       memlock: -1
       stack: 67108864
+    networks:
+      - gachai-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7000/v2/health/ready"]
@@ -48,6 +50,6 @@ services:
     #           capabilities: [gpu]
 
 networks:
-  default:
-    name: triton-onnx-network
+  gachai-network:
+    external: true
 
