@@ -1,0 +1,14 @@
+# System Logging Dependencies
+# Add these to your main requirements.txt
+
+# PostgreSQL async driver
+asyncpg>=0.29.0
+
+# Settings management (if not already installed)
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# Optional: For structured logging (complement to database logging)
+structlog>=24.0.0
+python-json-logger>=2.0.0
+
