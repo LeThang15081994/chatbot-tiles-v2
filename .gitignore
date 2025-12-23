@@ -5,6 +5,8 @@ db/milvus/schema_image_search/
 db/milvus/schema_chatbot/
 db/postgreSQL/volumes/
 mlops/triton/model_repository/
+mlops/onnx-service/model_repository/
+app/logging/
 *.tar
 *.zip
 # Ignore credentials
