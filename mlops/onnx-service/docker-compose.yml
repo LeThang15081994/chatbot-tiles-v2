@@ -1,0 +1,33 @@
+
+services:
+  onnx-embedding:
+    build: .
+    container_name: onnx-embedding-service
+    ports:
+      - "7000:7000"
+    volumes:
+      # Mount ONNX model directory
+      # Model is at: chatbot/embeddings_onnx/1/model.onnx
+      - ./model_repository/paraphrase-multilingual-mpnet-base-v2-onnx:/app/models:ro
+    environment:
+      - MODEL_DIR=/app/models/1
+      - OMP_NUM_THREADS=4
+      - MKL_NUM_THREADS=4
+    restart: unless-stopped
+    networks:
+      - gachai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+
+networks:
+  gachai-network:
+    external: true
+

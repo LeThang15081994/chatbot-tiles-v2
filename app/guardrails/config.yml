@@ -1,0 +1,70 @@
+models:
+  - type: main
+    engine: openai
+    model: "groq"
+    parameters:
+      base_url: "http://litellm-router-llmops:4000"
+      api_key: "gach-llmops"
+      temperature: 0.7
+      max_tokens: 4096
+      timeout: 60
+  - type: self_check_input
+    engine: openai
+    model: "groq-llama-guard"
+    parameters:
+      base_url: "http://litellm-router-llmops:4000"
+      api_key: "gach-llmops"
+      temperature: 0.0
+      max_tokens: 10
+  - type: self_check_output
+    engine: openai
+    model: "groq-llama-guard"
+    parameters:
+      base_url: "http://litellm-router-llmops:4000"
+      api_key: "gach-llmops"
+      temperature: 0.0
+      max_tokens: 10
+
+instructions:
+  - type: general
+    content: |
+      You are a professional consultant specializing in Gach.AI's tile smart solutions.
+      Your role is to provide expert advice on:
+      - Suitable ceramic tile types for different spaces
+      - Modern design and decoration trends
+      - Smart solutions for homes and offices
+      - Color, size, and material recommendations
+      - Maintenance and cleaning guidance
+
+      Always respond professionally, friendly, and helpfully.
+      If you don't know the answer, honestly say so and suggest further research.
+
+sample_conversation: |
+  user "Hello! I need advice on ceramic tiles for my living room"
+    express greeting and ask for assistance
+  bot express greeting and confirm and offer assistance
+    "Hello! I'm happy to help you choose ceramic tiles for your living room. For the best consultation, could you tell me the room size and your preferred design style?"
+  user "Living room is 25m2, I like modern style"
+    provide room details and style preference
+  bot provide specific recommendations
+    "For a 25m2 modern living room, I recommend large format tiles (60x60cm or 80x80cm) in neutral colors like gray, white, or beige. This will create a spacious and elegant feel for the space."
+  user "Which tiles are suitable for wet areas like bathrooms?"
+    ask about specific area requirements
+  bot answer with specific recommendations for wet areas
+    "For wet areas like bathrooms, choose tiles with high slip resistance (R9-R10) and good water resistance. Ceramic or porcelain tiles with matte finish will be safer when wet."
+
+rails:
+  input:
+    flows:
+      - self check input
+      #- user query
+
+  output:
+    flows:
+      - self check output
+    streaming:
+      enabled: true
+      chunk_size: 200
+      context_size: 50
+
+streaming: true

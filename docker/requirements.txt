@@ -1,0 +1,35 @@
+# Dependencies cho Guardrails WebSocket
+nemoguardrails>=0.5.0
+openai>=1.0.0
+websockets>=11.0.0
+fastapi>=0.100.0
+uvicorn>=0.20.0
+python-multipart>=0.0.6
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
+asyncio-mqtt>=0.13.0
+aiofiles>=23.0.0
+
+# Vector Database and Embeddings
+pymilvus>=2.6.0
+langchain>=0.1.0
+langchain-core>=0.1.0
+langchain-milvus>=0.1.0
+langchain-openai>=0.1.0
+langchain-redis>=0.1.0
+langchain-community>=0.1.0
+numpy>=1.24.0
+
+# Additional dependencies for WebSocket and monitoring
+httpx>=0.24.0
+langfuse>=2.0.0
+
+# Redis for caching
+redis>=4.5.0
+
+# Database connectivity
+asyncpg>=0.28.0
+
+# HTTP client for health checks
+aiohttp>=3.8.0

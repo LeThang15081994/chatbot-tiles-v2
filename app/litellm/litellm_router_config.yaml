@@ -1,0 +1,51 @@
+model_list:
+# Groq Models for Inference
+  - model_name: groq
+    litellm_params:
+      model: groq/openai/gpt-oss-120b
+      api_base: https://api.groq.com/openai/v1
+      api_key: os.environ/GROQ_API_KEY
+      tpm: 50000
+      rpm: 100
+      weight: 10
+      max_parallel_requests: 10
+      timeout: 300
+      stream_timeout: 30
+
+  - model_name: groq-llama-guard
+    litellm_params:
+      model: groq/meta-llama/llama-guard-4-12b
+      api_base: https://api.groq.com/openai/v1
+      api_key: os.environ/GROQ_API_KEY
+      tpm: 50000
+      rpm: 100
+      weight: 1
+      max_parallel_requests: 20
+      timeout: 60
+      stream_timeout: 10
+
+router_settings:
+  routing_strategy: simple-shuffle
+  allowed_fails: 3
+  cooldown_time: 30
+  retry_policy:
+    APIConnectionErrorRetries: 3
+    RateLimitErrorRetries: 3
+    APITimeoutErrorRetries: 3
+    ServiceUnavailableErrorRetries: 3
+    BadRequestErrorRetries: 3
+    ContentPolicyViolationErrorRetries: 4
+  allowed_fails_policy:
+    ContentPolicyViolationErrorAllowedFails: 1000
+    RateLimitErrorAllowedFails: 100
+
+  redis_host: cache-redis
+  redis_port: 6379
+  redis_password: ""
+
+general_settings:
+  master_key: gach-llmops
+
+litellm_settings:
+  drop_params: true
+
