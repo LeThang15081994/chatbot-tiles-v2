@@ -34,6 +34,10 @@ class LangfuseService:
 
     def _initialize(self) -> None:
         """Initialize Langfuse client and handler"""
+        # Skip initialization if Langfuse keys are not provided
+        if not self.settings.LANGFUSE_PUBLIC_KEY or not self.settings.LANGFUSE_SECRET_KEY:
+            return
+
         try:
             import os
 
@@ -42,7 +46,9 @@ class LangfuseService:
             os.environ["LANGFUSE_SECRET_KEY"] = self.settings.LANGFUSE_SECRET_KEY
             os.environ["LANGFUSE_HOST"] = self.settings.LANGFUSE_HOST
             os.environ["LANGFUSE_TRACING_ENVIRONMENT"] = self.settings.ENVIRONMENT
-            os.environ["LANGFUSE_RELEASE"] = self.settings.APP_VERSION
+            # Get APP_VERSION from environment or use default
+            app_version = os.environ.get("APP_VERSION", "2.0.0")
+            os.environ["LANGFUSE_RELEASE"] = app_version
 
             # Initialize client
             from langfuse import get_client

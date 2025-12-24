@@ -2,6 +2,7 @@
 services:
   onnx-embedding:
     build: .
+    image: onnx-service:latest
     container_name: onnx-embedding-service
     ports:
       - "7000:7000"

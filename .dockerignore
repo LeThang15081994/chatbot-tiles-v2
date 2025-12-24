@@ -1,0 +1,179 @@
+# ============================================
+# .dockerignore for Chatbot Tiles v2
+# Excludes unnecessary files from Docker build context
+# ============================================
+
+# Git
+.git/
+.gitignore
+.gitattributes
+.gitmodules
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv/
+.conda/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.staging
+*.env
+
+# Logs
+*.log
+logs/
+app/logging/
+chatbot-ceramic-tiles/**/logging/
+*.log.*
+
+# Database volumes and data
+db/milvus/volumes/
+db/milvus/schema_image_search/
+db/milvus/schema_chatbot/
+db/postgresql/volumes/
+*.db
+*.sqlite
+*.sqlite3
+
+# Model repositories
+mlops/triton/model_repository/
+mlops/onnx-service/model_repository/
+
+# Documentation
+docs/
+*.md
+!README.md
+LICENSE
+
+# CI/CD
+ci/
+.github/
+.gitlab-ci.yml
+Jenkinsfile
+.travis.yml
+.circleci/
+
+# Deployment scripts
+deploy/
+scripts/
+
+# Old project directories
+chatbot-ceramic-tiles/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.swp
+*.swo
+*~
+
+# Archives
+*.tar
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Credentials and secrets
+credentials/
+secrets/
+*.key
+*.pem
+*.cert
+*.crt
+*.p12
+*.pfx
+
+# Test files
+tests/
+test/
+*_test.py
+test_*.py
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# MLOps (not needed in app container)
+mlops/
+
+# Node modules (if any)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Docker files (keep Dockerfile and requirements.txt)
+docker/.dockerignore
+docker/docker-compose.*.yml
+!docker/Dockerfile
+!docker/requirements.txt
+
+# Build artifacts
+*.pyc
+*.pyo
+*.pyd
+.cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Coverage reports
+.coverage
+coverage.xml
+*.cover
+.hypothesis/
+
+# Profiling data
+.prof
+
