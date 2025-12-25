@@ -27,7 +27,7 @@ services:
   # LiteLLM Router
   # Uses shared PostgreSQL instance from db/postgresql/docker-compose.yml
   litellm-router:
-    image: ghcr.io/berriai/litellm:v1.77.3-stable
+    image: ghcr.io/berriai/litellm:v1.80.8-stable
     container_name: litellm-router-llmops
     ports:
       - "4000:4000"
