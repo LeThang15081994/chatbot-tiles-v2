@@ -12,9 +12,9 @@ class DatabaseSettings(BaseSettings):
     # PostgreSQL Connection
     POSTGRES_HOST: str = Field(default="localhost", description="PostgreSQL host")
     POSTGRES_PORT: int = Field(default=5432, description="PostgreSQL port")
-    POSTGRES_DB: str = Field(default="gachai_db", description="Database name")
-    POSTGRES_USER: str = Field(default="gachai_db", description="Database user")
-    POSTGRES_PASSWORD: str = Field(default="", description="Database password")
+    POSTGRES_DB: str = Field(default="gachai_db", description="PostgreSQL database name")
+    POSTGRES_USER: str = Field(default="gachai_db", description="PostgreSQL user")
+    POSTGRES_PASSWORD: str = Field(default="gachai@123", description="PostgreSQL password")
 
     # Connection Pool Settings
     POSTGRES_MIN_POOL_SIZE: int = Field(default=5, description="Minimum connection pool size")
