@@ -6,11 +6,11 @@ from typing import List
 import httpx
 import numpy as np
 
-from app.src.application.interfaces.embedding_repository import IEmbedding
+from app.src.application.interfaces.embedding_repository import IEmbeddingRepository
 from app.src.infrastructure.config.embedding_settings import EmbeddingSettings
 
 
-class TritonEmbeddingService(IEmbedding):
+class TritonEmbeddingService(IEmbeddingRepository):
     """
     Triton Inference Server implementation for embeddings
 

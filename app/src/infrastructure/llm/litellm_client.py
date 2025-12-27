@@ -5,7 +5,7 @@ Routes LLM requests through LiteLLM proxy with LangChain tool calling support
 import json
 from typing import AsyncGenerator, List, Dict, Any, Optional
 from langchain_openai import ChatOpenAI
-from langchain.tools import StructuredTool
+from langchain_core.tools import StructuredTool
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from app.src.application.interfaces.llm_repository import ILLMRepository

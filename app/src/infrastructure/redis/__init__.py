@@ -1,11 +1,25 @@
 """
 Redis Infrastructure Module
+
+All Redis-related cache implementations are located here:
+- AnswerCache: LLM response cache with semantic similarity
+- ContextCache: Retriever result cache
+- CachedONNXEmbeddings: Embedding cache wrapper (uses Redis)
+- CachedRetriever: Retriever with context cache (uses Redis)
+
+Removed:
+- RedisCacheRepository: Not used in pipeline (removed)
+- SemanticCacheRepository: Deprecated, replaced by AnswerCache + ContextCache (removed)
 """
-from .redis_cache import RedisCacheRepository
-from .semantic_cache import SemanticCacheRepository
+from .answer_cache import AnswerCache
+from .context_cache import ContextCache
+from .cached_embeddings import CachedONNXEmbeddings
+from .cached_retriever import CachedRetriever
 
 __all__ = [
-    "RedisCacheRepository",
-    "SemanticCacheRepository",
+    "AnswerCache",  # LLM response cache
+    "ContextCache",  # Retriever result cache
+    "CachedONNXEmbeddings",  # Embedding cache wrapper
+    "CachedRetriever",  # Retriever with context cache
 ]
 

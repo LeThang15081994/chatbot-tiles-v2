@@ -3,6 +3,7 @@ LLM Configuration Settings
 """
 from pydantic_settings import BaseSettings
 from typing import Optional
+from pydantic import Field
 
 
 class LLMSettings(BaseSettings):
@@ -25,7 +26,7 @@ class LLMSettings(BaseSettings):
     LLM_MODEL: str = Field(default="groq", description="LLM model")
     LLM_TEMPERATURE: float = Field(default=0.7, description="LLM temperature")
     LLM_MAX_TOKENS: int = Field(default=4096, description="LLM max tokens")
-    LLM_STREAMING: bool = Field(default=True, description="LLM streaming")
+    LLM_STREAMING: bool = Field(default=False, description="LLM streaming")
     LLM_TIMEOUT: int = Field(default=60, description="LLM timeout")
 
     # Shopping Cart API Configuration

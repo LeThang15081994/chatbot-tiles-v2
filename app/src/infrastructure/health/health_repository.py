@@ -20,9 +20,9 @@ class HealthRepository(IHealthRepository):
     def __init__(
         self,
         vector_store,
-        cache,
-        llm_client,
-        database,
+        context_cache=None,  # Use context_cache to check Redis health
+        llm_client=None,
+        database=None,
         embedding_service=None
     ):
         """
@@ -30,13 +30,13 @@ class HealthRepository(IHealthRepository):
 
         Args:
             vector_store: Milvus vector store repository
-            cache: Redis cache repository
+            context_cache: Context cache (has Redis client for health check)
             llm_client: LLM client
             database: PostgreSQL database
             embedding_service: Embedding service (optional)
         """
         self.vector_store = vector_store
-        self.cache = cache
+        self.context_cache = context_cache
         self.llm_client = llm_client
         self.database = database
         self.embedding_service = embedding_service
@@ -68,7 +68,14 @@ class HealthRepository(IHealthRepository):
         """Check Redis cache health"""
         start = time.time()
         try:
-            healthy = await self.cache.health_check()
+            # Check Redis connection via context_cache
+            if self.context_cache and hasattr(self.context_cache, 'redis_client'):
+                # Try to ping Redis
+                self.context_cache.redis_client.ping()
+                healthy = True
+            else:
+                healthy = False
+
             response_time = int((time.time() - start) * 1000)
 
             return ServiceHealthDTO(
