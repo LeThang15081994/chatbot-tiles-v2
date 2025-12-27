@@ -1,4 +1,4 @@
-name: chatbot-ceramic-tiles-dev
+name: chatbot-tiles-dev
 
 # Development environment docker-compose
 # Includes LiteLLM Router for LLM management and cost tracking
