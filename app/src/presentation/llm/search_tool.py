@@ -13,7 +13,7 @@ the "presentation" of search and action capabilities to the LLM.
 """
 import json
 from typing import Optional, List
-from langchain.tools import StructuredTool
+from langchain_core.tools import StructuredTool
 
 from app.src.application.use_cases.search_use_case import SearchUseCase
 from app.src.application.dto.search_dto import (

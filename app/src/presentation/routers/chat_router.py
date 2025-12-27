@@ -1,46 +1,16 @@
 """
 Chat Router
-Handles chat-related HTTP and WebSocket endpoints
+Handles chat-related WebSocket endpoints
 """
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
 from dependency_injector.wiring import inject, Provide
 
 from app.src.presentation.controllers import ChatController
-from app.src.application.dto.chat_dto import (
-    ChatRequestDTO,
-    ChatResponseDTO,
-    WSChatMessageDTO,
-)
+from app.src.application.dto.chat_dto import WSChatMessageDTO
 from app.src.bootstrap.container import Container
 
 
 router = APIRouter(prefix="/v1/chat", tags=["Chat"])
-
-
-@router.post("/completions", response_model=ChatResponseDTO)
-@inject
-async def chat(
-    request: ChatRequestDTO,
-    controller: ChatController = Depends(Provide[Container.chat_controller]),
-):
-    """
-    Chat completion endpoint (non-streaming)
-
-    Args:
-        request: Chat request DTO
-        controller: Chat controller (injected)
-
-    Returns:
-        Chat response DTO
-    """
-    try:
-        # Set stream=False for REST endpoint (create new instance to avoid mutation)
-        request_dict = request.model_dump()
-        request_dict['stream'] = False
-        chat_dto = ChatRequestDTO(**request_dict)
-        return await controller.chat(chat_dto)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.websocket("/completions")
@@ -48,15 +18,21 @@ async def websocket_chat(
     websocket: WebSocket,
 ):
     """
-    WebSocket endpoint for streaming chat
+    WebSocket endpoint for chat (supports both streaming and non-streaming)
 
     Protocol:
-    - Client sends: WSChatMessage
-    - Server sends: Dict responses (START -> SOURCES -> CHUNK* -> END)
+    - Client sends: WSChatMessage with "stream": true/false
+    - Server sends:
+      * Streaming mode (stream=true): START -> SOURCES -> CHUNK* -> END
+      * Non-streaming mode (stream=false): START -> SOURCES -> RESPONSE -> END
+
+    Examples:
+    - Streaming: {"type": "chat", "query": "...", "stream": true}
+    - Non-streaming: {"type": "chat", "query": "...", "stream": false}
     """
     await websocket.accept()
 
-    # Get controller from container
+    # Get controller from container (using DI)
     from app.src.bootstrap.container import Container
     container = Container()
     controller = container.chat_controller()
@@ -90,8 +66,8 @@ async def websocket_chat(
             # Handle CHAT
             if message.type == "chat":
                 try:
-                    # Stream chat response
-                    async for response_chunk in controller.chat_stream(message.model_dump()):
+                    # Use unified method that handles both streaming and non-streaming
+                    async for response_chunk in controller.chat_websocket(message.model_dump()):
                         await websocket.send_json(response_chunk)
 
                 except Exception as e:
