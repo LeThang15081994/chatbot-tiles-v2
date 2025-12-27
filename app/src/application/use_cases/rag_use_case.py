@@ -11,7 +11,6 @@ from dataclasses import dataclass
 if TYPE_CHECKING:
     from app.src.domain.services.summarize_service import SummarizeService
 from app.src.application.interfaces.llm_repository import ILLMRepository
-from app.src.application.interfaces.cache_repository import ISemanticCacheRepository
 from app.src.application.use_cases.search_use_case import SearchUseCase
 from app.src.application.dto.chat_dto import (
     ChatRequestDTO,
@@ -56,7 +55,8 @@ class RAGUseCase:
         self,
         search_use_case: SearchUseCase,
         llm_service: ILLMRepository,
-        cache_service: Optional[ISemanticCacheRepository] = None,
+        answer_cache: Optional[Any] = None,  # NEW: AnswerCache (replaces cache_service)
+        context_cache: Optional[Any] = None,  # NEW: ContextCache for retriever results
         guardrails_service: Optional[GuardrailsService] = None,
         langfuse_service: Optional[LangfuseService] = None,
         context_builder: Optional[ContextBuilderService] = None,
@@ -70,7 +70,8 @@ class RAGUseCase:
         Args:
             search_use_case: Search use case for document retrieval (used by tool)
             llm_service: LLM repository for generation
-            cache_service: Optional cache repository for semantic caching
+            answer_cache: Optional answer cache for LLM responses (replaces cache_service)
+            context_cache: Optional context cache for retriever results
             guardrails_service: Optional guardrails service for input/output validation
             langfuse_service: Optional Langfuse service for tracing and observability
             context_builder: Optional context builder service for formatting tool results
@@ -80,7 +81,8 @@ class RAGUseCase:
         """
         self.search_use_case = search_use_case
         self.llm_service = llm_service
-        self.cache_service = cache_service
+        self.answer_cache = answer_cache  # NEW: Answer cache
+        self.context_cache = context_cache  # NEW: Context cache
         self.guardrails_service = guardrails_service
         self.langfuse_service = langfuse_service
         self.context_builder = context_builder
@@ -192,17 +194,16 @@ class RAGUseCase:
                 # Log error but continue processing
                 print(f"Guardrails input validation error: {e}")
 
-        # Check pre-cache (before LLM call, based on question only)
-        # Similar to code cũ: @semantic_cache_llms.cache(namespace="pre-cache")
-        if self.cache_service:
-            cached_response = await self.cache_service.get_similar(
+        # Check answer cache (before LLM call)
+        # This uses RedisSemanticCache for semantic similarity matching
+        if self.answer_cache:
+            cached_answer = await self.answer_cache.get(
                 query=request.question,
-                threshold=0.95,
                 namespace="pre-cache"  # Pre-cache: TTL = 20 seconds
             )
-            if cached_response:
+            if cached_answer:
                 return ChatResponseDTO(
-                    answer=cached_response,
+                    answer=cached_answer,
                     session_id=session_id,
                     user_id=user_id,
                     processing_time_ms=int((time.time() - start_time) * 1000)
@@ -455,28 +456,28 @@ class RAGUseCase:
                 # Log error but continue
                 print(f"Guardrails output validation error: {e}")
 
-        # Cache the response
+        # Cache the answer
         # If tool calls were made, cache in post-cache (15 minutes)
         # Otherwise, cache in pre-cache (20 seconds)
-        if self.cache_service and answer:
+        if self.answer_cache and answer:
             if tool_response.get("has_tool_calls", False) and messages:
                 # Post-cache: after tool execution (TTL = 15 minutes)
-                # Build context string from messages (similar to code cũ)
+                # Build context string from messages for cache key
                 context_str = "\n".join([
                     f"{msg.role}: {msg.content}"
                     for msg in messages
                     if msg.content
                 ])
-                await self.cache_service.set_with_embedding(
+                await self.answer_cache.set(
                     query=context_str,
-                    value=answer,
+                    answer=answer,
                     namespace="post-cache"  # Post-cache: TTL = 15 minutes
                 )
             else:
                 # Pre-cache: no tool calls (TTL = 20 seconds)
-                await self.cache_service.set_with_embedding(
+                await self.answer_cache.set(
                     query=request.question,
-                    value=answer,
+                    answer=answer,
                     namespace="pre-cache"  # Pre-cache: TTL = 20 seconds
                 )
 
@@ -875,12 +876,10 @@ class RAGUseCase:
             except Exception as e:
                 print(f"Guardrails input validation error: {e}")
 
-        # Check pre-cache (before LLM call, based on question only)
-        # Similar to code cũ: @semantic_cache_llms.cache(namespace="pre-cache")
-        if self.cache_service:
-            cached_response = await self.cache_service.get_similar(
+        # Check answer cache (before LLM call)
+        if self.answer_cache:
+            cached_response = await self.answer_cache.get(
                 query=request.question,
-                threshold=0.95,
                 namespace="pre-cache"  # Pre-cache: TTL = 20 seconds
             )
             if cached_response:
@@ -1040,17 +1039,16 @@ class RAGUseCase:
 
                 # Check post-cache (after tool execution, based on messages with tool results)
                 # Similar to code cũ: @semantic_cache_llms.cache(namespace="post-cache")
-                if self.cache_service and messages:
-                    # Build context string from messages (similar to code cũ's build_context)
+                if self.answer_cache and messages:
+                    # Build context string from messages for cache key
                     context_str = "\n".join([
                         f"{msg.role}: {msg.content}"
                         for msg in messages
                         if msg.content
                     ])
 
-                    cached_response = await self.cache_service.get_similar(
+                    cached_response = await self.answer_cache.get(
                         query=context_str,
-                        threshold=0.95,
                         namespace="post-cache"  # Post-cache: TTL = 15 minutes
                     )
                     if cached_response:
@@ -1202,22 +1200,22 @@ class RAGUseCase:
             # tool_calls_detected is set during streaming
             if tool_calls_detected and 'messages' in locals() and messages:
                 # Post-cache: after tool execution (TTL = 15 minutes)
-                # Build context string from messages (similar to code cũ)
+                # Build context string from messages for cache key
                 context_str = "\n".join([
                     f"{msg.role}: {msg.content}"
                     for msg in messages
                     if msg.content
                 ])
-                await self.cache_service.set_with_embedding(
+                await self.answer_cache.set(
                     query=context_str,
-                    value=full_response,
+                    answer=full_response,
                     namespace="post-cache"  # Post-cache: TTL = 15 minutes
                 )
             else:
                 # Pre-cache: no tool calls (TTL = 20 seconds)
-                await self.cache_service.set_with_embedding(
+                await self.answer_cache.set(
                     query=request.question,
-                    value=full_response,
+                    answer=full_response,
                     namespace="pre-cache"  # Pre-cache: TTL = 20 seconds
                 )
 

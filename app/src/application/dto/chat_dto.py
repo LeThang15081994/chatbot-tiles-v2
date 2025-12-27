@@ -139,6 +139,7 @@ class WSChatMessageDTO(BaseModel):
     session_id: Optional[str] = Field(default=None, description="Session ID")
     user_id: Optional[str] = Field(default=None, description="User ID")
     conversation_id: Optional[str] = Field(default=None, description="Conversation identifier")
+    stream: bool = Field(default=True, description="Enable streaming response (true for streaming, false for non-streaming)")
 
     # Search configuration
     top_k: Optional[int] = Field(default=5, ge=1, le=20, description="Number of documents to retrieve")
@@ -159,7 +160,8 @@ class WSChatMessageDTO(BaseModel):
                 "type": "chat",
                 "query": "Gạch wooden là gì?",
                 "session_id": "uuid-session-123",
-                "user_id": "user_456"
+                "user_id": "user_456",
+                "stream": True
             }
         }
 
