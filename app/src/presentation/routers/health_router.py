@@ -5,7 +5,7 @@ Handles health check endpoints
 from fastapi import APIRouter, Depends, HTTPException
 from dependency_injector.wiring import inject, Provide
 
-from app.src.presentation.controllers import HealthController
+from app.src.presentation.controllers.health_controller import HealthController
 from app.src.application.dto.health_dto import HealthCheckResponseDTO
 from app.src.bootstrap.container import Container
 
@@ -18,14 +18,7 @@ router = APIRouter(prefix="/health", tags=["Health"])
 async def health_check(
     controller: HealthController = Depends(Provide[Container.health_controller]),
 ) -> HealthCheckResponseDTO:
-    """
-    Full health check
-
-    Checks all services: Triton, Milvus, Redis, PostgreSQL
-
-    Returns:
-        Health status of all services
-    """
+    """Full health check - checks all services: Triton, Milvus, Redis, PostgreSQL"""
     try:
         health = await controller.health_check()
         return health
@@ -38,14 +31,7 @@ async def health_check(
 async def readiness_check(
     controller: HealthController = Depends(Provide[Container.health_controller]),
 ):
-    """
-    Readiness check
-
-    Returns 200 if service is ready to accept requests
-
-    Returns:
-        Readiness status
-    """
+    """Readiness check - returns 200 if service is ready to accept requests"""
     try:
         readiness = await controller.readiness_check()
         if not readiness["ready"]:
@@ -65,14 +51,7 @@ async def readiness_check(
 async def liveness_check(
     controller: HealthController = Depends(Provide[Container.health_controller]),
 ):
-    """
-    Liveness check
-
-    Returns 200 if service is alive
-
-    Returns:
-        Liveness status
-    """
+    """Liveness check - returns 200 if service is alive"""
     try:
         liveness = await controller.liveness_check()
         return liveness

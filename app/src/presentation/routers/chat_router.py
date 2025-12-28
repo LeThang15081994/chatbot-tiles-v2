@@ -2,13 +2,15 @@
 Chat Router
 Handles chat-related WebSocket endpoints
 """
+import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
 from dependency_injector.wiring import inject, Provide
 
-from app.src.presentation.controllers import ChatController
+from app.src.presentation.controllers.chat_controller import ChatController
 from app.src.application.dto.chat_dto import WSChatMessageDTO
 from app.src.bootstrap.container import Container
 
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/chat", tags=["Chat"])
 
@@ -32,9 +34,10 @@ async def websocket_chat(
     """
     await websocket.accept()
 
-    # Get controller from container (using DI)
-    from app.src.bootstrap.container import Container
-    container = Container()
+    # Get controller from container stored in app.state (reuse same container instance)
+    # This ensures Singleton instances (like prompt_builder) are reused
+    # WebSocket has 'app' attribute to access FastAPI application instance
+    container = websocket.app.state.container
     controller = container.chat_controller()
 
     try:
@@ -80,22 +83,32 @@ async def websocket_chat(
                     })
 
     except WebSocketDisconnect:
-        print("WebSocket disconnected")
+        # WebSocket already disconnected by client, no need to close
+        logger.debug("WebSocket disconnected by client")
+        pass
 
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        logger.error(f"WebSocket error: {e}", exc_info=True)
         try:
+            # Only try to send error if WebSocket is still open
             await websocket.send_json({
                 "type": "error",
                 "error": "InternalError",
                 "message": "Unexpected error",
                 "detail": str(e),
             })
-        except:
+        except (WebSocketDisconnect, RuntimeError, Exception):
+            # WebSocket might already be closed or disconnected, ignore
             pass
 
     finally:
-        await websocket.close()
+        # Only close if WebSocket is still open
+        # Use try/except to handle cases where WebSocket is already closed
+        try:
+            await websocket.close()
+        except (WebSocketDisconnect, RuntimeError, Exception):
+            # WebSocket already closed or in invalid state, ignore silently
+            pass
 
 
 @router.get("/history/{user_id}/{session_id}")
@@ -105,17 +118,7 @@ async def get_conversation_history(
     session_id: str,
     controller: ChatController = Depends(Provide[Container.chat_controller]),
 ):
-    """
-    Get conversation history
-
-    Args:
-        user_id: User identifier
-        session_id: Session identifier
-        controller: Chat controller (injected)
-
-    Returns:
-        Conversation history
-    """
+    """Get conversation history"""
     try:
         history = await controller.get_conversation_history(user_id, session_id)
         return {"user_id": user_id, "session_id": session_id, "history": history}
@@ -130,17 +133,7 @@ async def clear_conversation_history(
     session_id: str,
     controller: ChatController = Depends(Provide[Container.chat_controller]),
 ):
-    """
-    Clear conversation history
-
-    Args:
-        user_id: User identifier
-        session_id: Session identifier
-        controller: Chat controller (injected)
-
-    Returns:
-        Success message
-    """
+    """Clear conversation history"""
     try:
         success = await controller.clear_conversation(user_id, session_id)
         if success:

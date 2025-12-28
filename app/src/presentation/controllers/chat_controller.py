@@ -65,13 +65,6 @@ class ChatController:
                 session_id=session_id,
                 user_id=user_id,
                 stream=True,
-                top_k=message.get("top_k", settings.TOP_K),
-                similarity_threshold=message.get("similarity_threshold", settings.SIMILARITY_THRESHOLD),
-                search_type=message.get("search_type", "hybrid"),
-                temperature=message.get("temperature", settings.LLM_TEMPERATURE),
-                max_tokens=message.get("max_tokens", settings.LLM_MAX_TOKENS),
-                metadata_filter=message.get("metadata_filter"),
-                metadata=message.get("metadata_filter"),
             )
 
             # Execute streaming RAG use case
@@ -177,13 +170,6 @@ class ChatController:
                 session_id=session_id,
                 user_id=user_id,
                 stream=False,  # Force non-streaming
-                top_k=message.get("top_k", 5),
-                similarity_threshold=message.get("similarity_threshold"),
-                search_type=message.get("search_type", "hybrid"),
-                temperature=message.get("temperature", 0.7),
-                max_tokens=message.get("max_tokens"),
-                metadata_filter=message.get("metadata_filter"),
-                metadata=message.get("metadata_filter"),
             )
 
             # Execute non-streaming RAG use case

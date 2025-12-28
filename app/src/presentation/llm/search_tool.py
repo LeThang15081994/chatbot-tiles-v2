@@ -24,7 +24,7 @@ from app.src.application.dto.search_dto import (
     ProductsSearchArgsDTO,
     AddToCartArgsDTO
 )
-from app.src.infrastructure.shopping_cart.shopping_cart_service import ShoppingCartService
+from app.src.infrastructure.tool.shopping_cart_service import ShoppingCartService
 
 
 def create_company_info_tool(search_use_case: SearchUseCase) -> StructuredTool:

@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from dependency_injector.wiring import inject, Provide
 
-from app.src.presentation.controllers import DocumentController
+from app.src.presentation.controllers.document_controller import DocumentController
 from app.src.application.dto.document_dto import (
     DocumentUploadRequestDTO,
     DocumentUploadResponseDTO,
@@ -24,16 +24,7 @@ async def upload_document(
     request: DocumentUploadRequestDTO,
     controller: DocumentController = Depends(Provide[Container.document_controller]),
 ) -> DocumentUploadResponseDTO:
-    """
-    Upload a document
-
-    Args:
-        request: Document upload request DTO
-        controller: Document controller (injected)
-
-    Returns:
-        Upload response with document ID
-    """
+    """Upload a document"""
     try:
         response = await controller.upload_document(request)
         return response
@@ -51,20 +42,7 @@ async def upload_document_file(
     uploaded_by: str = Form(...),
     controller: DocumentController = Depends(Provide[Container.document_controller]),
 ) -> DocumentUploadResponseDTO:
-    """
-    Upload a document from file
-
-    Args:
-        file: Uploaded file
-        title: Document title
-        source: Document source
-        category: Document category
-        uploaded_by: User who uploaded
-        controller: Document controller (injected)
-
-    Returns:
-        Upload response
-    """
+    """Upload a document from file"""
     try:
         # Read file content
         content = await file.read()
@@ -96,16 +74,7 @@ async def search_documents(
     request: SearchRequestDTO,
     controller: DocumentController = Depends(Provide[Container.document_controller]),
 ) -> SearchResponseDTO:
-    """
-    Search documents
-
-    Args:
-        request: Search request DTO
-        controller: Document controller (injected)
-
-    Returns:
-        Search results
-    """
+    """Search documents"""
     try:
         response = await controller.search_documents(request)
         return response
@@ -119,16 +88,7 @@ async def get_document(
     document_id: str,
     controller: DocumentController = Depends(Provide[Container.document_controller]),
 ):
-    """
-    Get document by ID
-
-    Args:
-        document_id: Document identifier
-        controller: Document controller (injected)
-
-    Returns:
-        Document details
-    """
+    """Get document by ID"""
     try:
         document = await controller.get_document(document_id)
         if document is None:
@@ -146,16 +106,7 @@ async def delete_document(
     document_id: str,
     controller: DocumentController = Depends(Provide[Container.document_controller]),
 ):
-    """
-    Delete document
-
-    Args:
-        document_id: Document identifier
-        controller: Document controller (injected)
-
-    Returns:
-        Success message
-    """
+    """Delete document"""
     try:
         success = await controller.delete_document(document_id)
         if success:
@@ -175,17 +126,7 @@ async def list_documents(
     limit: int = 50,
     controller: DocumentController = Depends(Provide[Container.document_controller]),
 ):
-    """
-    List all documents
-
-    Args:
-        skip: Number of documents to skip
-        limit: Maximum documents to return
-        controller: Document controller (injected)
-
-    Returns:
-        List of documents
-    """
+    """List all documents"""
     try:
         documents = await controller.list_documents(skip, limit)
         return {
