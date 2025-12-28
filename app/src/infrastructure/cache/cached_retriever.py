@@ -23,7 +23,8 @@ from typing import List, Optional, Dict, Any
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 
-from app.src.infrastructure.redis import ContextCache
+from app.src.infrastructure.cache.context_cache import ContextCache
+
 
 logger = logging.getLogger(__name__)
 
@@ -69,11 +70,11 @@ class CachedRetriever(BaseRetriever):
             filters: Metadata filters (for cache key)
         """
         super().__init__()
-        self.retriever = retriever
-        self.context_cache = context_cache
-        self.k = k
-        self.collection = collection
-        self.filters = filters
+        object.__setattr__(self, 'retriever', retriever)
+        object.__setattr__(self, 'context_cache', context_cache)
+        object.__setattr__(self, 'k', k)
+        object.__setattr__(self, 'collection', collection)
+        object.__setattr__(self, 'filters', filters)
 
     def _get_relevant_documents(
         self,

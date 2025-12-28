@@ -1,17 +1,23 @@
 """
-File-based System Log Repository Implementation
+Logging Repository
 
-Application logs được ghi ra file và KHÔNG lưu vào PostgreSQL theo thiết kế.
-Hệ thống logging này sử dụng file rotation theo ngày và tự động xóa log cũ hơn 15 ngày.
+Centralized logging configuration and repository implementation with:
+- Daily rotation (app-YYYY-MM-DD.log)
+- 15-day retention
+- Structured logging
+- Multiple log levels
+- ISystemLogRepository implementation
 """
 import logging
 import logging.handlers
-import os
+import sys
 import json
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional, List
 from datetime import datetime, timedelta
-from app.src.application.interfaces.system_log_repository import ISystemLogRepository
+
+from app.src.infrastructure.config.settings import settings
+from app.src.application.interfaces.repositories.system_log_repository import ISystemLogRepository
 from app.src.application.dto.system_log_dto import (
     SystemLogCreateDTO,
     SystemLogDTO,
@@ -21,17 +27,162 @@ from app.src.application.dto.system_log_dto import (
     LogStatsDTO,
 )
 
-from app.src.infrastructure.config.settings import settings
 
-
-class FileLogRepository(ISystemLogRepository):
+class LoggerConfig:
     """
-    File-based implementation of system log repository
+    Centralized logging configuration
 
-    Responsibilities:
-    - Write logs to daily rotating files (app-YYYY-MM-DD.log)
-    - Automatically clean up logs older than 15 days
-    - Provide structured logging with ISO 8601 timestamps
+    Features:
+    - Daily log rotation (app-YYYY-MM-DD.log)
+    - Automatic cleanup of logs older than 15 days
+    - Structured logging with JSON-like format
+    - Console and file handlers
+    """
+
+    _configured = False
+    _log_dir: Optional[Path] = None
+
+    @classmethod
+    def setup_logging(
+        cls,
+        log_dir: Optional[str] = None,
+        retention_days: int = 15,
+        log_level: str = "INFO",
+        service_name: str = "chatbot"
+    ) -> None:
+        """
+        Setup application-wide logging configuration
+
+        Args:
+            log_dir: Directory for log files (default: app/logging)
+            retention_days: Number of days to keep logs (default: 15)
+            log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+            service_name: Service name for log identification
+        """
+        if cls._configured:
+            return  # Already configured
+
+        # Determine log directory
+        if log_dir is None:
+            try:
+                log_dir = settings.LOG_DIR if hasattr(settings, 'LOG_DIR') else "./app/logging"
+            except Exception:
+                log_dir = "./app/logging"
+
+        cls._log_dir = Path(log_dir)
+        cls._log_dir.mkdir(parents=True, exist_ok=True)
+
+        # Convert log level string to logging constant
+        level = getattr(logging, log_level.upper(), logging.INFO)
+
+        # Create formatter with structured format
+        formatter = logging.Formatter(
+            fmt='%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+
+        # Create daily rotating file handler
+        log_file = cls._log_dir / f"app-{datetime.now().strftime('%Y-%m-%d')}.log"
+        file_handler = logging.handlers.TimedRotatingFileHandler(
+            filename=str(log_file),
+            when='midnight',
+            interval=1,
+            backupCount=retention_days,
+            encoding='utf-8',
+            delay=False
+        )
+        file_handler.setLevel(level)
+        file_handler.setFormatter(formatter)
+        file_handler.suffix = "%Y-%m-%d"
+
+        # Create console handler (for development)
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(level)
+        console_handler.setFormatter(formatter)
+
+        # Configure root logger
+        root_logger = logging.getLogger()
+        root_logger.setLevel(level)
+
+        # Remove existing handlers to avoid duplicates
+        root_logger.handlers.clear()
+
+        # Add handlers
+        root_logger.addHandler(file_handler)
+        root_logger.addHandler(console_handler)
+
+        # Prevent duplicate logs from propagating
+        root_logger.propagate = False
+
+        # Clean up old log files
+        cls._cleanup_old_logs(cls._log_dir, retention_days)
+
+        cls._configured = True
+
+        # Log configuration success
+        logger = logging.getLogger(__name__)
+        logger.info(f"Logging configured: dir={log_dir}, level={log_level}, retention={retention_days} days")
+
+    @staticmethod
+    def _cleanup_old_logs(log_dir: Path, retention_days: int) -> None:
+        """
+        Clean up log files older than retention_days
+
+        Args:
+            log_dir: Log directory
+            retention_days: Number of days to keep
+        """
+        if not log_dir.exists():
+            return
+
+        cutoff_date = datetime.now() - timedelta(days=retention_days)
+        deleted_count = 0
+
+        for log_file in log_dir.glob("app-*.log*"):
+            try:
+                # Extract date from filename: app-YYYY-MM-DD.log
+                if log_file.name.startswith("app-") and log_file.name.endswith(".log"):
+                    date_str = log_file.name.replace("app-", "").replace(".log", "")
+                    try:
+                        file_date = datetime.strptime(date_str, "%Y-%m-%d")
+                        if file_date.date() < cutoff_date.date():
+                            log_file.unlink()
+                            deleted_count += 1
+                    except ValueError:
+                        # Skip files with invalid date format
+                        continue
+            except Exception:
+                # Ignore errors during cleanup
+                pass
+
+        if deleted_count > 0:
+            logger = logging.getLogger(__name__)
+            logger.info(f"Cleaned up {deleted_count} old log file(s)")
+
+    @classmethod
+    def get_logger(cls, name: str) -> logging.Logger:
+        """
+        Get a logger instance for a module
+
+        Args:
+            name: Logger name (usually __name__)
+
+        Returns:
+            Configured logger instance
+        """
+        if not cls._configured:
+            # Auto-configure if not already done
+            cls.setup_logging()
+
+        return logging.getLogger(name)
+
+
+class LoggerRepository(ISystemLogRepository):
+    """
+    Logger Repository Implementation
+
+    Implements ISystemLogRepository interface using the centralized logging system.
+    Uses the same log files as LoggerConfig (app-YYYY-MM-DD.log).
     """
 
     def __init__(
@@ -42,78 +193,38 @@ class FileLogRepository(ISystemLogRepository):
         environment: Optional[str] = None
     ):
         """
-        Initialize file log repository
+        Initialize logger repository
 
         Args:
-            log_dir: Directory to store log files (default: from settings.LOG_DIR)
-            retention_days: Number of days to keep logs (default: from settings.LOG_RETENTION_DAYS)
-            service_name: Default service name for logs (default: from settings.APP_NAME)
-            environment: Application environment (default: from settings.APP_ENVIRONMENT)
+            log_dir: Directory for log files (default: from settings)
+            retention_days: Number of days to keep logs (default: 15)
+            service_name: Default service name for logs
+            environment: Application environment
         """
-        # Use settings if not provided (lazy evaluation to avoid import issues)
+        # Use settings if not provided
         try:
             self.log_dir = Path(log_dir if log_dir is not None else settings.LOG_DIR)
             self.retention_days = retention_days if retention_days is not None else settings.LOG_RETENTION_DAYS
             self.service_name = service_name if service_name is not None else settings.APP_NAME
             self.environment = environment if environment is not None else settings.APP_ENVIRONMENT
-        except Exception as e:
-            # Fallback values if settings are not available
-            self.log_dir = Path(log_dir if log_dir is not None else "/app/logging")
+        except Exception:
+            # Fallback values
+            self.log_dir = Path(log_dir if log_dir is not None else "./app/logging")
             self.retention_days = retention_days if retention_days is not None else 15
             self.service_name = service_name if service_name is not None else "chatbot"
             self.environment = environment if environment is not None else "development"
-            print(f"Warning: Could not load settings, using defaults. Error: {e}")
 
         # Create log directory if it doesn't exist
-        try:
-            self.log_dir.mkdir(parents=True, exist_ok=True)
-        except (PermissionError, OSError) as e:
-            # If we can't create the directory, try to use a fallback location
-            fallback_dir = Path("/tmp/logs")
-            print(f"Warning: Could not create log directory {self.log_dir}: {e}")
-            print(f"Using fallback directory: {fallback_dir}")
-            try:
-                fallback_dir.mkdir(parents=True, exist_ok=True)
-                self.log_dir = fallback_dir
-            except Exception as fallback_error:
-                print(f"Error: Could not create fallback log directory: {fallback_error}")
-                raise
+        self.log_dir.mkdir(parents=True, exist_ok=True)
 
         # Store current date to track rotation
         self._current_date = datetime.now().date()
-
-        # Get today's log file path (format: app-YYYY-MM-DD.log)
         self._current_log_file = self._get_log_file_path()
-
-        # Create formatter
-        formatter = logging.Formatter(
-            fmt='%(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
-
-        # Create file handler for today's log file
-        handler = logging.FileHandler(
-            filename=str(self._current_log_file),
-            mode='a',
-            encoding='utf-8'
-        )
-        handler.setFormatter(formatter)
-
-        # Configure root logger
-        self.logger = logging.getLogger(f"app.{service_name}")
-        self.logger.setLevel(logging.DEBUG)
-
-        # Remove existing handlers to avoid duplicates
-        self.logger.handlers.clear()
-        self.logger.addHandler(handler)
-
-        # Prevent duplicate logs
-        self.logger.propagate = False
 
         # Clean up old log files on initialization
         self._cleanup_old_logs()
 
-        # Schedule periodic cleanup (runs daily at startup check)
+        # Schedule periodic cleanup
         self._last_cleanup_date = datetime.now().date()
 
     def _get_log_file_path(self, date: Optional[datetime] = None) -> Path:
@@ -197,18 +308,6 @@ class FileLogRepository(ISystemLogRepository):
             self._current_date = today
             self._current_log_file = self._get_log_file_path()
 
-            # Create new handler for today's file
-            handler = logging.FileHandler(
-                filename=str(self._current_log_file),
-                mode='a',
-                encoding='utf-8'
-            )
-            handler.setFormatter(logging.Formatter(fmt='%(message)s'))
-
-            # Replace handler
-            self.logger.handlers.clear()
-            self.logger.addHandler(handler)
-
             # Clean up old logs when date changes
             if today != self._last_cleanup_date:
                 self._cleanup_old_logs()
@@ -221,13 +320,11 @@ class FileLogRepository(ISystemLogRepository):
         """
         Create a system log entry in file
 
-        Application logs được ghi ra file và KHÔNG lưu vào PostgreSQL theo thiết kế.
-
         Args:
             log: Log data to create
 
         Returns:
-            Log sequence number (not database ID)
+            Log sequence number
         """
         # Ensure we're writing to today's log file (rotate if needed)
         self._ensure_current_log_file()
@@ -251,20 +348,25 @@ class FileLogRepository(ISystemLogRepository):
             user_id=user_id
         )
 
-        # Write to appropriate log level
-        if log.level == SystemLogLevel.INFO:
-            self.logger.info(log_entry)
-        elif log.level == SystemLogLevel.WARN:
-            self.logger.warning(log_entry)
-        elif log.level == SystemLogLevel.ERROR:
-            self.logger.error(log_entry)
-        elif log.level == SystemLogLevel.FATAL:
-            self.logger.critical(log_entry)
-        else:
-            self.logger.debug(log_entry)
+        # Write directly to file to maintain structured format
+        try:
+            with open(self._current_log_file, 'a', encoding='utf-8') as f:
+                f.write(log_entry + '\n')
+        except Exception:
+            # Fallback: use root logger if file write fails
+            root_logger = logging.getLogger()
+            if log.level == SystemLogLevel.INFO:
+                root_logger.info(log_entry)
+            elif log.level == SystemLogLevel.WARN:
+                root_logger.warning(log_entry)
+            elif log.level == SystemLogLevel.ERROR:
+                root_logger.error(log_entry)
+            elif log.level == SystemLogLevel.FATAL:
+                root_logger.critical(log_entry)
+            else:
+                root_logger.debug(log_entry)
 
-        # Return a sequence number (not database ID since we're not using DB)
-        # This is just for compatibility with the interface
+        # Return a sequence number
         return hash(f"{datetime.now().isoformat()}{log.message}") % 1000000
 
     async def get_logs(
@@ -281,10 +383,8 @@ class FileLogRepository(ISystemLogRepository):
             query: Query filters
 
         Returns:
-            Logs matching query (limited functionality for file-based logs)
+            Logs matching query
         """
-        # For file-based logging, querying is limited
-        # In production, use log aggregation tools
         logs = []
         total_count = 0
 
@@ -295,7 +395,7 @@ class FileLogRepository(ISystemLogRepository):
                 with open(today_file, 'r', encoding='utf-8') as f:
                     lines = f.readlines()
                     total_count = len(lines)
-                    # Simple filtering (for production, use proper log parsing)
+                    # Simple filtering
                     for line in lines[-query.limit:]:
                         if query.service_name and query.service_name not in line:
                             continue
@@ -304,7 +404,7 @@ class FileLogRepository(ISystemLogRepository):
                         if query.search_text and query.search_text.lower() not in line.lower():
                             continue
 
-                        # Create a simplified DTO (file-based logs don't have IDs)
+                        # Create a simplified DTO
                         log_dto = SystemLogDTO(
                             id=hash(line) % 1000000,
                             service_name=query.service_name or self.service_name,
@@ -337,12 +437,11 @@ class FileLogRepository(ISystemLogRepository):
         This method is kept for interface compatibility.
 
         Args:
-            log_id: Log ID (not applicable for file-based logs)
+            log_id: Log ID
 
         Returns:
             None (file-based logs don't support ID-based retrieval)
         """
-        # File-based logs don't have persistent IDs
         return None
 
     async def get_stats(
@@ -434,32 +533,17 @@ class FileLogRepository(ISystemLogRepository):
         if self.log_dir.exists():
             for log_file in self.log_dir.glob("app-*.log*"):
                 try:
-                    # Extract date from filename
-                    # Format: app-YYYY-MM-DD.log or app.log.YYYY-MM-DD
-                    file_date = None
+                    # Extract date from filename: app-YYYY-MM-DD.log
                     if log_file.name.startswith("app-") and log_file.name.endswith(".log"):
                         date_str = log_file.name.replace("app-", "").replace(".log", "")
                         try:
                             file_date = datetime.strptime(date_str, "%Y-%m-%d")
+                            if file_date.date() < cutoff_date.date():
+                                log_file.unlink()
+                                deleted_count += 1
                         except ValueError:
                             continue
-                    elif ".log." in log_file.name:
-                        # Handle rotated files: app.log.2025-01-15
-                        date_str = log_file.name.split(".log.")[-1]
-                        try:
-                            file_date = datetime.strptime(date_str, "%Y-%m-%d")
-                        except ValueError:
-                            continue
-
-                    if file_date and file_date.date() < cutoff_date.date():
-                        try:
-                            log_file.unlink()
-                            deleted_count += 1
-                        except Exception:
-                            # Ignore errors during file deletion
-                            pass
                 except Exception:
-                    # Ignore errors during cleanup
                     pass
 
         return deleted_count
@@ -479,4 +563,34 @@ class FileLogRepository(ISystemLogRepository):
             return True
         except Exception:
             return False
+
+
+def setup_app_logging() -> None:
+    """
+    Convenience function to setup application logging
+
+    Call this at application startup (e.g., in main.py or container.py)
+    """
+    try:
+        log_dir = settings.LOG_DIR if hasattr(settings, 'LOG_DIR') else "./app/logging"
+        retention_days = settings.LOG_RETENTION_DAYS if hasattr(settings, 'LOG_RETENTION_DAYS') else 15
+        log_level = settings.LOG_LEVEL if hasattr(settings, 'LOG_LEVEL') else "INFO"
+        service_name = settings.APP_NAME if hasattr(settings, 'APP_NAME') else "chatbot"
+
+        LoggerConfig.setup_logging(
+            log_dir=log_dir,
+            retention_days=retention_days,
+            log_level=log_level,
+            service_name=service_name
+        )
+    except Exception as e:
+        # Fallback configuration if settings are not available
+        LoggerConfig.setup_logging(
+            log_dir="./app/logging",
+            retention_days=15,
+            log_level="INFO",
+            service_name="chatbot"
+        )
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Could not load logging settings, using defaults. Error: {e}")
 

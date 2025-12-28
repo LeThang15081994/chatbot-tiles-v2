@@ -5,7 +5,7 @@ import asyncpg
 from typing import Optional
 from contextlib import asynccontextmanager
 
-from app.src.infrastructure.config.database_settings import db_settings
+from app.src.infrastructure.config.settings import db_settings
 
 class PostgreSQLDatabase:
     """

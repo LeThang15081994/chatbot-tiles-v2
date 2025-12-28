@@ -1,26 +1,34 @@
 """
 LiteLLM Client Implementation
 Routes LLM requests through LiteLLM proxy with LangChain tool calling support
+Implements both ILLMRepository (for RAGUseCase) and ILLMService (for AnswerCacheFacade)
 """
 import json
+import asyncio
 from typing import AsyncGenerator, List, Dict, Any, Optional
-from langchain_openai import ChatOpenAI
+from langchain_litellm import ChatLiteLLM
 from langchain_core.tools import StructuredTool
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from app.src.application.interfaces.llm_repository import ILLMRepository
 from app.src.application.dto.chat_dto import ChatMessageDTO
-from app.src.infrastructure.config.llm_settings import LLMSettings
+from app.src.application.interfaces.services.llm_service_interface import ILLMService
+from app.src.infrastructure.config.settings import LLMSettings
 
 
-class LiteLLMClient(ILLMRepository):
+class LiteLLMClient(ILLMService):
     """
-    LiteLLM implementation of ILLMClient
+    LiteLLM implementation using ChatLiteLLM
 
-    Routes all LLM requests through LiteLLM proxy for:
-    - Load balancing
-    - Cost tracking
-    - Multiple provider support
+    Implements both:
+    - ILLMService (Domain interface) for AnswerCacheFacade
+    - Tool calling methods (for RAGUseCase)
+
+    Technical specs:
+    - Client: ChatLiteLLM from langchain_community
+    - Model Alias: LLM_MODEL (as defined in proxy config)
+    - Authentication: LITELLM_MASTER_KEY in openai_api_key
+    - Endpoint: LITELLM_PROXY_URL in openai_api_base
+    - No retries/fallbacks (Proxy handles this)
     """
 
     def __init__(self, settings: LLMSettings):
@@ -31,21 +39,21 @@ class LiteLLMClient(ILLMRepository):
             settings: LLM configuration settings
         """
         self.settings = settings
-        self.llm: Optional[ChatOpenAI] = None
+        self.llm: Optional[ChatLiteLLM] = None
         self.llm_with_tools: Optional[Any] = None
         self.tools: List[StructuredTool] = []
         self._initialize()
 
     def _initialize(self) -> None:
-        """Initialize LangChain ChatOpenAI with LiteLLM proxy"""
+        """Initialize ChatLiteLLM client"""
         try:
-            self.llm = ChatOpenAI(
+            self.llm = ChatLiteLLM(
                 model=self.settings.LLM_MODEL,
-                base_url=self.settings.LITELLM_BASE_URL,
-                api_key=self.settings.LITELLM_API_KEY,
+                openai_api_key=self.settings.LITELLM_API_KEY,
+                openai_api_base=self.settings.LITELLM_BASE_URL,
                 temperature=self.settings.LLM_TEMPERATURE,
                 max_tokens=self.settings.LLM_MAX_TOKENS,
-                streaming=self.settings.LLM_STREAMING,
+                timeout=self.settings.LLM_TIMEOUT,
             )
         except Exception as e:
             raise RuntimeError(f"Failed to initialize LiteLLM client: {e}")
@@ -288,11 +296,32 @@ class LiteLLMClient(ILLMRepository):
             return False
 
     def get_available_models(self) -> List[str]:
-        """
-        Get list of available models
-
-        Returns:
-            List of model names
-        """
+        """Get list of available models"""
         return [self.settings.LLM_MODEL] if self.settings.LLM_MODEL else []
+
+    # ILLMService implementation (for AnswerCacheFacade)
+    async def invoke(self, prompt: str, **kwargs) -> str:
+        """Generate response from LLM (ILLMService interface)"""
+        try:
+            if not self.llm:
+                raise RuntimeError("LLM not initialized")
+            message = HumanMessage(content=prompt)
+            response = await asyncio.to_thread(self.llm.invoke, [message])
+            return response.content if hasattr(response, 'content') else str(response)
+        except Exception as e:
+            raise RuntimeError(f"LLM invocation failed: {e}")
+
+    async def stream(self, prompt: str, **kwargs) -> AsyncGenerator[str, None]:
+        """Stream response from LLM (ILLMService interface)"""
+        try:
+            if not self.llm:
+                raise RuntimeError("LLM not initialized")
+            message = HumanMessage(content=prompt)
+            for chunk in await asyncio.to_thread(lambda: list(self.llm.stream([message]))):
+                if hasattr(chunk, 'content'):
+                    yield chunk.content
+                else:
+                    yield str(chunk)
+        except Exception as e:
+            raise RuntimeError(f"LLM streaming failed: {e}")
 

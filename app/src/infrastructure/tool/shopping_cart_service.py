@@ -4,7 +4,7 @@ Handles API calls to shopping cart service
 """
 import httpx
 from typing import Dict, Any, Optional
-from app.src.infrastructure.config.llm_settings import LLMSettings
+from app.src.infrastructure.config.settings import LLMSettings
 
 
 class ShoppingCartService:

@@ -7,15 +7,16 @@ from pymilvus import connections, Collection, utility
 from langchain_milvus import Milvus, BM25BuiltInFunction
 from langchain_core.documents import Document as LangchainDocument
 
-from app.src.application.interfaces.vector_store_repository import IVectorStoreRepository
 from app.src.application.dto.document_dto import DocumentDTO, DocumentMetadataDTO
 from app.src.application.dto.search_dto import SearchResultDTO, SearchMetadataDTO
-from app.src.domain.entities import Document, RetrievalResult, RetrievalStrategy
-from app.src.domain.value_objects import SearchQuery, SearchFilter
-from app.src.infrastructure.config.milvus_settings import MilvusSettings
+from app.src.domain.entities.document import Document
+from app.src.domain.entities.retrieval_result import RetrievalResult, RetrievalStrategy
+from app.src.domain.value_objects.query import SearchQuery
+from app.src.domain.value_objects.search_filter import SearchFilter
+from app.src.infrastructure.config.settings import MilvusSettings
 
 
-class MilvusVectorStoreRepository(IVectorStoreRepository):
+class MilvusVectorStoreRepository:
     """
     Milvus implementation of IVectorStore
 
@@ -234,171 +235,6 @@ class MilvusVectorStoreRepository(IVectorStoreRepository):
                 "content"
             )
 
-    def _convert_langchain_doc_to_domain(
-        self,
-        lc_doc: LangchainDocument
-    ) -> Document:
-        """Convert LangChain Document to Domain Document"""
-        return Document(
-            content=lc_doc.page_content,
-            source=lc_doc.metadata.get("source"),
-            metadata=lc_doc.metadata,
-            vector_score=lc_doc.metadata.get("score"),
-            bm25_score=lc_doc.metadata.get("bm25_score"),
-            hybrid_score=lc_doc.metadata.get("hybrid_score")
-        )
-
-    async def _search_domain(
-        self,
-        query: SearchQuery,
-        filters: Optional[SearchFilter] = None
-    ) -> RetrievalResult:
-        """
-        Hybrid search implementation (domain method - internal use)
-
-        Args:
-            query: Search query with parameters
-            filters: Optional metadata filters
-
-        Returns:
-            RetrievalResult with documents
-        """
-        try:
-            # Get collection
-            collection, wrapper, text_field = self._get_collection_by_name(
-                query.collection_name
-            )
-
-            if not collection or not wrapper:
-                return RetrievalResult(
-                    query=query.text,
-                    documents=[],
-                    strategy=RetrievalStrategy.HYBRID,
-                    total_retrieved=0
-                )
-
-            # Convert filters to Milvus expression
-            filter_expr = None
-            if filters and not filters.is_empty():
-                filter_expr = filters.to_milvus_expr()
-
-            # For products, always filter active products
-            if query.collection_name and "product" in query.collection_name.lower():
-                active_filter = "isActive == true"
-                if filter_expr:
-                    filter_expr = f"{filter_expr} && {active_filter}"
-                else:
-                    filter_expr = active_filter
-
-            # Perform hybrid search
-            documents = []
-
-            # Vector search
-            vector_results = wrapper.similarity_search(
-                query=query.text,
-                k=query.top_k * 2,
-                expr=filter_expr
-            )
-
-            # BM25 search if available
-            bm25_results = []
-            if self.bm25_function:
-                try:
-                    bm25_results = collection.search(
-                        data=[query.text],
-                        anns_field=text_field,
-                        param={"metric_type": "BM25"},
-                        limit=query.top_k * 2,
-                        expr=filter_expr,
-                        output_fields=[text_field, "metadata"]
-                    )
-                except Exception:
-                    pass
-
-            # Combine and score results
-            doc_scores = {}
-
-            # Process vector results
-            for lc_doc in vector_results:
-                doc_id = lc_doc.metadata.get('id')
-                if doc_id:
-                    doc = self._convert_langchain_doc_to_domain(lc_doc)
-                    doc_scores[doc_id] = {
-                        'doc': doc,
-                        'vector_score': doc.vector_score or 0.0,
-                        'bm25_score': 0.0,
-                        'combined_score': (doc.vector_score or 0.0) * 0.7
-                    }
-
-            # Process BM25 results
-            for hits in bm25_results:
-                for hit in hits:
-                    doc_id = hit.id
-                    if doc_id in doc_scores:
-                        doc_scores[doc_id]['bm25_score'] = hit.score
-                        doc_scores[doc_id]['combined_score'] += hit.score * 0.3
-                    else:
-                        # Create new document from BM25 result
-                        doc = Document(
-                            content=hit.entity.get(text_field, ""),
-                            metadata=hit.entity.get("metadata", {}),
-                            bm25_score=hit.score
-                        )
-                        doc_scores[doc_id] = {
-                            'doc': doc,
-                            'vector_score': 0.0,
-                            'bm25_score': hit.score,
-                            'combined_score': hit.score * 0.3
-                        }
-
-            # Sort by combined score and take top_k
-            sorted_results = sorted(
-                doc_scores.values(),
-                key=lambda x: x['combined_score'],
-                reverse=True
-            )[:query.top_k]
-
-            # Update document scores
-            for result in sorted_results:
-                doc = result['doc']
-                doc.vector_score = result['vector_score']
-                doc.bm25_score = result['bm25_score']
-                doc.hybrid_score = result['combined_score']
-                documents.append(doc)
-
-            return RetrievalResult(
-                query=query.text,
-                documents=documents,
-                strategy=RetrievalStrategy.HYBRID,
-                total_retrieved=len(documents)
-            )
-
-        except Exception as e:
-            raise RuntimeError(f"Search failed: {e}")
-
-    async def _add_documents_domain(self, documents: List[Document]) -> List[str]:
-        """Add documents to collection (domain method - internal use)"""
-        try:
-            if not self.langchain_milvus_document:
-                raise RuntimeError("Milvus not initialized")
-
-            # Convert domain documents to LangChain documents
-            lc_docs = [
-                LangchainDocument(
-                    page_content=doc.content,
-                    metadata=doc.metadata
-                )
-                for doc in documents
-            ]
-
-            # Add via LangChain wrapper
-            doc_ids = self.langchain_milvus_document.add_documents(lc_docs)
-
-            return doc_ids
-
-        except Exception as e:
-            raise RuntimeError(f"Failed to add documents: {e}")
-
     async def delete_documents(self, document_ids: List[str]) -> bool:
         """Delete documents by IDs"""
         try:
@@ -417,203 +253,6 @@ class MilvusVectorStoreRepository(IVectorStoreRepository):
 
         except Exception as e:
             raise RuntimeError(f"Failed to delete documents: {e}")
-
-    async def search(
-        self,
-        query: str,
-        k: int = 5,
-        collection_name: Optional[str] = None,
-        filter_expr: Optional[str] = None
-    ) -> List[SearchResultDTO]:
-        """
-        Perform vector similarity search (interface method)
-
-        Args:
-            query: Search query text
-            k: Number of results to return
-            collection_name: Name of collection to search
-            filter_expr: Filter expression for metadata filtering
-
-        Returns:
-            List of search results
-        """
-        try:
-            # Get collection and wrapper
-            collection, wrapper, text_field = self._get_collection_by_name(collection_name)
-
-            if not collection or not wrapper:
-                return []
-
-            # Perform vector search
-            results = wrapper.similarity_search(
-                query=query,
-                k=k,
-                expr=filter_expr
-            )
-
-            # Convert to SearchResultDTO
-            search_results = []
-            for lc_doc in results:
-                metadata = lc_doc.metadata
-                search_metadata = SearchMetadataDTO(
-                    id=metadata.get('id'),
-                    category=metadata.get('category'),
-                    source=metadata.get('source'),
-                    brand_name=metadata.get('brand_name') or metadata.get('brandName'),
-                    collection_name=collection_name,
-                    updated_time=metadata.get('updated_time') or metadata.get('updatedTime'),
-                    vector_score=metadata.get('score') or metadata.get('vector_score')
-                )
-
-                search_result = SearchResultDTO(
-                    content=lc_doc.page_content,
-                    metadata=search_metadata,
-                    score=metadata.get('score') or metadata.get('vector_score')
-                )
-                search_results.append(search_result)
-
-            return search_results
-
-        except Exception as e:
-            raise RuntimeError(f"Vector search failed: {e}")
-
-    async def hybrid_search(
-        self,
-        query: str,
-        k: int = 5,
-        collection_name: Optional[str] = None,
-        filter_expr: Optional[str] = None
-    ) -> List[SearchResultDTO]:
-        """
-        Perform hybrid search (vector + BM25) (interface method)
-
-        Args:
-            query: Search query text
-            k: Number of results to return
-            collection_name: Name of collection to search
-            filter_expr: Filter expression for metadata filtering
-
-        Returns:
-            List of search results
-        """
-        try:
-            # Get collection and wrapper
-            collection, wrapper, text_field = self._get_collection_by_name(collection_name)
-
-            if not collection or not wrapper:
-                return []
-
-            # For products, always filter active products
-            if collection_name and "product" in collection_name.lower():
-                active_filter = "isActive == true"
-                if filter_expr:
-                    filter_expr = f"{filter_expr} && {active_filter}"
-                else:
-                    filter_expr = active_filter
-
-            # Perform vector search
-            vector_results = wrapper.similarity_search(
-                query=query,
-                k=k * 2,
-                expr=filter_expr
-            )
-
-            # BM25 search if available
-            bm25_results = []
-            if self.bm25_function:
-                try:
-                    bm25_results = collection.search(
-                        data=[query],
-                        anns_field=text_field,
-                        param={"metric_type": "BM25"},
-                        limit=k * 2,
-                        expr=filter_expr,
-                        output_fields=[text_field, "metadata"]
-                    )
-                except Exception:
-                    pass
-
-            # Combine and score results
-            doc_scores = {}
-
-            # Process vector results
-            for lc_doc in vector_results:
-                doc_id = lc_doc.metadata.get('id')
-                if doc_id:
-                    vector_score = lc_doc.metadata.get('score', 0.0)
-                    doc_scores[doc_id] = {
-                        'doc': lc_doc,
-                        'vector_score': vector_score,
-                        'bm25_score': 0.0,
-                        'combined_score': vector_score * 0.7
-                    }
-
-            # Process BM25 results
-            for hits in bm25_results:
-                for hit in hits:
-                    doc_id = hit.id
-                    bm25_score = hit.score
-                    if doc_id in doc_scores:
-                        doc_scores[doc_id]['bm25_score'] = bm25_score
-                        doc_scores[doc_id]['combined_score'] += bm25_score * 0.3
-                    else:
-                        # Create new document from BM25 result
-                        content = hit.entity.get(text_field, "")
-                        metadata = hit.entity.get("metadata", {})
-                        if isinstance(metadata, str):
-                            import json
-                            try:
-                                metadata = json.loads(metadata)
-                            except:
-                                metadata = {}
-
-                        lc_doc = LangchainDocument(
-                            page_content=content,
-                            metadata={**metadata, 'id': doc_id}
-                        )
-                        doc_scores[doc_id] = {
-                            'doc': lc_doc,
-                            'vector_score': 0.0,
-                            'bm25_score': bm25_score,
-                            'combined_score': bm25_score * 0.3
-                        }
-
-            # Sort by combined score and take top_k
-            sorted_results = sorted(
-                doc_scores.values(),
-                key=lambda x: x['combined_score'],
-                reverse=True
-            )[:k]
-
-            # Convert to SearchResultDTO
-            search_results = []
-            for result in sorted_results:
-                lc_doc = result['doc']
-                metadata = lc_doc.metadata
-
-                search_metadata = SearchMetadataDTO(
-                    id=metadata.get('id'),
-                    category=metadata.get('category'),
-                    source=metadata.get('source'),
-                    brand_name=metadata.get('brand_name') or metadata.get('brandName'),
-                    collection_name=collection_name,
-                    updated_time=metadata.get('updated_time') or metadata.get('updatedTime'),
-                    hybrid_score=result['combined_score'],
-                    vector_score=result['vector_score'],
-                    bm25_score=result['bm25_score']
-                )
-
-                search_result = SearchResultDTO(
-                    content=lc_doc.page_content,
-                    metadata=search_metadata,
-                    score=result['combined_score']
-                )
-                search_results.append(search_result)
-
-            return search_results
-
-        except Exception as e:
-            raise RuntimeError(f"Hybrid search failed: {e}")
 
     async def add_documents(
         self,
@@ -704,6 +343,145 @@ class MilvusVectorStoreRepository(IVectorStoreRepository):
         except Exception as e:
             raise RuntimeError(f"Failed to update document: {e}")
 
+    async def hybrid_search(
+        self,
+        query: str,
+        k: int = 5,
+        collection_name: Optional[str] = None,
+        filter_expr: Optional[str] = None
+    ) -> List[SearchResultDTO]:
+        """
+        Perform hybrid search (vector + BM25) using LangChain for vector search
+
+        Args:
+            query: Search query text
+            k: Number of results to return
+            collection_name: Name of collection to search
+            filter_expr: Filter expression for metadata filtering
+
+        Returns:
+            List of search results with combined scores
+        """
+        try:
+            # Get collection and wrapper
+            collection, wrapper, text_field = self._get_collection_by_name(collection_name)
+
+            if not collection or not wrapper:
+                return []
+
+            # For products, always filter active products
+            if collection_name and "product" in collection_name.lower():
+                active_filter = "isActive == true"
+                if filter_expr:
+                    filter_expr = f"{filter_expr} && {active_filter}"
+                else:
+                    filter_expr = active_filter
+
+            # Vector search using LangChain wrapper (vector similarity)
+            vector_results = wrapper.similarity_search(
+                query=query,
+                k=k * 2,  # Get more results for combining
+                expr=filter_expr
+            )
+
+            # BM25 search using direct PyMilvus (only for BM25)
+            bm25_results = []
+            if self.bm25_function:
+                try:
+                    bm25_results = collection.search(
+                        data=[query],
+                        anns_field=text_field,
+                        param={"metric_type": "BM25"},
+                        limit=k * 2,
+                        expr=filter_expr,
+                        output_fields=[text_field, "metadata"]
+                    )
+                except Exception:
+                    pass
+
+            # Combine and score results
+            doc_scores = {}
+
+            # Process vector results (from LangChain)
+            for lc_doc in vector_results:
+                doc_id = lc_doc.metadata.get('id')
+                if doc_id:
+                    vector_score = lc_doc.metadata.get('score', 0.0)
+                    doc_scores[doc_id] = {
+                        'doc': lc_doc,
+                        'vector_score': vector_score,
+                        'bm25_score': 0.0,
+                        'combined_score': vector_score * 0.7  # Vector weight: 70%
+                    }
+
+            # Process BM25 results (from direct PyMilvus)
+            for hits in bm25_results:
+                for hit in hits:
+                    doc_id = hit.id
+                    bm25_score = hit.score
+                    if doc_id in doc_scores:
+                        # Document already in results from vector search
+                        doc_scores[doc_id]['bm25_score'] = bm25_score
+                        doc_scores[doc_id]['combined_score'] += bm25_score * 0.3  # BM25 weight: 30%
+                    else:
+                        # New document from BM25 only - convert to LangChain Document
+                        content = hit.entity.get(text_field, "")
+                        metadata = hit.entity.get("metadata", {})
+                        if isinstance(metadata, str):
+                            import json
+                            try:
+                                metadata = json.loads(metadata)
+                            except:
+                                metadata = {}
+
+                        lc_doc = LangchainDocument(
+                            page_content=content,
+                            metadata={**metadata, 'id': doc_id}
+                        )
+                        doc_scores[doc_id] = {
+                            'doc': lc_doc,
+                            'vector_score': 0.0,
+                            'bm25_score': bm25_score,
+                            'combined_score': bm25_score * 0.3  # BM25 only: 30%
+                        }
+
+            # Sort by combined score and take top_k
+            sorted_results = sorted(
+                doc_scores.values(),
+                key=lambda x: x['combined_score'],
+                reverse=True
+            )[:k]
+
+            # Convert to SearchResultDTO
+            search_results = []
+            for result in sorted_results:
+                lc_doc = result['doc']
+                metadata = lc_doc.metadata
+
+                search_metadata = SearchMetadataDTO(
+                    id=metadata.get('id'),
+                    category=metadata.get('category'),
+                    source=metadata.get('source'),
+                    brand_name=metadata.get('brand_name') or metadata.get('brandName'),
+                    collection_name=collection_name,
+                    updated_time=metadata.get('updated_time') or metadata.get('updatedTime'),
+                    hybrid_score=result['combined_score'],
+                    vector_score=result['vector_score'],
+                    bm25_score=result['bm25_score']
+                )
+
+                search_result = SearchResultDTO(
+                    content=lc_doc.page_content,
+                    metadata=search_metadata,
+                    score=result['combined_score']
+                )
+                search_results.append(search_result)
+
+            return search_results
+
+        except Exception as e:
+            raise RuntimeError(f"Hybrid search failed: {e}")
+
     async def get_document(
         self,
         document_id: str,
@@ -766,61 +544,6 @@ class MilvusVectorStoreRepository(IVectorStoreRepository):
 
         except Exception as e:
             raise RuntimeError(f"Failed to get document: {e}")
-
-    async def get_collection_stats(
-        self,
-        collection_name: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """
-        Get collection statistics (interface method)
-
-        Args:
-            collection_name: Name of collection
-
-        Returns:
-            Dictionary with collection stats
-        """
-        try:
-            # Get collection
-            collection, _, _ = self._get_collection_by_name(collection_name)
-
-            if not collection:
-                return {
-                    "collection_name": collection_name,
-                    "exists": False,
-                    "entity_count": 0
-                }
-
-            # Get stats
-            collection.load()
-            stats = collection.num_entities
-
-            return {
-                "collection_name": collection_name or "default",
-                "exists": True,
-                "entity_count": stats,
-                "is_loaded": collection.has_index()
-            }
-
-        except Exception as e:
-            return {
-                "collection_name": collection_name,
-                "exists": False,
-                "error": str(e)
-            }
-
-    async def list_collections(self) -> List[str]:
-        """
-        List all available collections (interface method)
-
-        Returns:
-            List of collection names
-        """
-        try:
-            collections = utility.list_collections(using=self.settings.MILVUS_ALIAS)
-            return collections
-        except Exception as e:
-            raise RuntimeError(f"Failed to list collections: {e}")
 
     async def health_check(self) -> bool:
         """Check Milvus health"""

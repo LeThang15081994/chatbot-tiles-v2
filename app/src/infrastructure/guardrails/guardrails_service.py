@@ -2,13 +2,22 @@
 Guardrails Service Implementation
 Handles input/output validation with NeMo Guardrails
 """
+import os
+import logging
 from typing import AsyncGenerator, List, Dict, Any, Optional
 from nemoguardrails import LLMRails, RailsConfig
 
-from app.src.infrastructure.config.guardrails_settings import GuardrailsSettings
+from app.src.application.interfaces.services.guardrails_interface import IGuardrailsService
+from app.src.infrastructure.config.settings import GuardrailsSettings
+
+logger = logging.getLogger(__name__)
+
+# Module-level cache for RailsConfig (loaded once at startup, reused for all instances)
+_cached_config: Optional[RailsConfig] = None
+_config_path: Optional[str] = None
 
 
-class GuardrailsService:
+class GuardrailsService(IGuardrailsService):
     """
     NeMo Guardrails service
 
@@ -30,17 +39,72 @@ class GuardrailsService:
         self.rails: Optional[LLMRails] = None
         self._initialize()
 
-    def _initialize(self) -> None:
-        """Initialize NeMo Guardrails"""
-        try:
-            # Load config from file
-            config = RailsConfig.from_path(self.settings.CONFIG_PATH)
+    def _load_guardrails_config(self) -> Optional[RailsConfig]:
+        """
+        Load guardrails config once and cache it for reuse
 
-            # Initialize LLMRails
-            self.rails = LLMRails(config)
+        This method loads the config from file and caches it at module level.
+        Subsequent calls return the cached config.
+
+        Returns:
+            RailsConfig instance if loaded successfully, None otherwise
+        """
+        global _cached_config, _config_path
+
+        # Return cached config if already loaded
+        if _cached_config is not None:
+            logger.debug(f"Reusing cached guardrails config from: {_config_path}")
+            return _cached_config
+
+        try:
+            config_path = self.settings.CONFIG_PATH
+
+            # Check if config path exists
+            if not os.path.exists(config_path):
+                logger.warning(
+                    f"Guardrails config path not found: {config_path}. "
+                    "Guardrails will be disabled."
+                )
+                return None
+
+            # Load config from file
+            logger.info(f"Loading guardrails config from: {config_path}")
+            config = RailsConfig.from_path(config_path)
+
+            # Cache config for reuse
+            _cached_config = config
+            _config_path = config_path
+
+            return config
 
         except Exception as e:
-            raise RuntimeError(f"Failed to initialize Guardrails: {e}")
+            logger.error(
+                f"Failed to load guardrails config: {e}",
+                exc_info=True
+            )
+            raise
+
+    def _initialize(self) -> None:
+        """Initialize NeMo Guardrails using cached config"""
+        try:
+            # Load config (will use cached if already loaded)
+            config = self._load_guardrails_config()
+
+            if config is None:
+                logger.warning(
+                    "Guardrails config not available. "
+                    "Guardrails will be disabled."
+                )
+                self.rails = None
+                return
+
+            # Initialize LLMRails with config
+            self.rails = LLMRails(config)
+            logger.info("Guardrails initialized successfully using cached config")
+
+        except Exception as e:
+            logger.warning(f"Failed to initialize Guardrails: {e}. Guardrails will be disabled.")
+            self.rails = None
 
     async def validate_input(
         self,
@@ -57,7 +121,13 @@ class GuardrailsService:
         """
         try:
             if not self.rails:
-                raise RuntimeError("Guardrails not initialized")
+                # Guardrails not available, return safe defaults
+                return {
+                    "blocked": False,
+                    "messages": messages,
+                    "altered": False,
+                    "altered_user_message": None
+                }
 
             # Run input validation rails only
             result = await self.rails.generate_async(
@@ -111,7 +181,10 @@ class GuardrailsService:
         """
         try:
             if not self.rails:
-                raise RuntimeError("Guardrails not initialized")
+                # Guardrails not available, pass through without validation
+                async for chunk in generator:
+                    yield chunk
+                return
 
             # Stream through guardrails
             async for chunk in self.rails.stream_async(

@@ -14,11 +14,10 @@ import hashlib
 import json
 from typing import List
 from langchain_core.embeddings import Embeddings
-from langchain.embeddings.cache import CacheBackedEmbeddings
+from langchain_classic.embeddings import CacheBackedEmbeddings
 from langchain_community.storage import RedisStore
 
-from app.src.infrastructure.config.redis_settings import RedisSettings
-from app.src.infrastructure.config.embedding_settings import EmbeddingSettings
+from app.src.infrastructure.config.settings import RedisSettings, EmbeddingSettings
 
 
 class CachedONNXEmbeddings(Embeddings):
@@ -75,11 +74,9 @@ class CachedONNXEmbeddings(Embeddings):
         )
 
         # Wrap base embeddings with cache
-        # CacheBackedEmbeddings is itself an Embeddings instance
         self._cached_embeddings = CacheBackedEmbeddings(
             underlying_embeddings=base_embeddings,
-            document_embedding_store=redis_store,
-            namespace=cache_namespace
+            document_embedding_store=redis_store
         )
 
     def embed_query(self, text: str) -> List[float]:

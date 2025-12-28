@@ -15,7 +15,7 @@ from typing import List
 import requests
 from langchain_core.embeddings import Embeddings
 
-from app.src.infrastructure.config.embedding_settings import EmbeddingSettings
+from app.src.infrastructure.config.settings import EmbeddingSettings
 
 
 class ONNXEmbeddings(Embeddings):
@@ -124,4 +124,18 @@ class ONNXEmbeddings(Embeddings):
             raise RuntimeError(f"Failed to call embedding service: {e}")
         except Exception as e:
             raise RuntimeError(f"Failed to generate embeddings: {e}")
+
+    async def health_check(self) -> bool:
+        """
+        Check if ONNX service is healthy and accessible
+
+        Returns:
+            True if healthy
+        """
+        try:
+            health_url = f"{self.service_url}/health"
+            response = requests.get(health_url, timeout=5)
+            return response.status_code == 200
+        except Exception:
+            return False
 

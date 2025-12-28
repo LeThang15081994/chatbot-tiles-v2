@@ -6,11 +6,11 @@ import time
 from typing import Dict, Any
 from datetime import datetime
 
-from app.src.application.interfaces.health_repository import IHealthRepository
+from app.src.application.interfaces.services.health_interface import IHealthService
 from app.src.application.dto.health_dto import ServiceHealthDTO, HealthStatus
 
 
-class HealthRepository(IHealthRepository):
+class HealthRepository(IHealthService):
     """
     Health repository implementation
 
@@ -147,6 +147,28 @@ class HealthRepository(IHealthRepository):
             return ServiceHealthDTO(
                 status=HealthStatus.UNHEALTHY,
                 type="embedding",
+                error=str(e)
+            )
+
+    async def check_onnx_health(self) -> ServiceHealthDTO:
+        """Check ONNX service health"""
+        start = time.time()
+        try:
+            if self.embedding_service and hasattr(self.embedding_service, 'health_check'):
+                healthy = await self.embedding_service.health_check()
+            else:
+                healthy = False
+            response_time = int((time.time() - start) * 1000)
+
+            return ServiceHealthDTO(
+                status=HealthStatus.HEALTHY if healthy else HealthStatus.UNHEALTHY,
+                type="onnx",
+                response_time_ms=response_time
+            )
+        except Exception as e:
+            return ServiceHealthDTO(
+                status=HealthStatus.UNHEALTHY,
+                type="onnx",
                 error=str(e)
             )
 

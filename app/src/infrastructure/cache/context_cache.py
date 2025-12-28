@@ -25,8 +25,7 @@ import logging
 from typing import List, Optional, Dict, Any
 from langchain_core.documents import Document
 
-from app.src.infrastructure.config.redis_settings import RedisSettings
-from app.src.infrastructure.config.embedding_settings import EmbeddingSettings
+from app.src.infrastructure.config.settings import RedisSettings, EmbeddingSettings
 
 logger = logging.getLogger(__name__)
 
