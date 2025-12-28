@@ -2,11 +2,15 @@
 Prompt Builder Domain Service
 Builds prompts for LLM from context and templates
 """
+import logging
 from typing import List, Optional, Dict, Any
 from app.src.domain.entities.document import Document
 from app.src.domain.entities.message import Message, MessageRole
 from app.src.domain.value_objects.context import RAGContext
 from app.src.domain.value_objects.prompt import PromptTemplate
+from app.src.infrastructure.config.settings import langfuse_settings
+
+logger = logging.getLogger(__name__)
 
 
 class PromptLoadError(Exception):
@@ -21,6 +25,16 @@ class PromptBuilderService:
     Responsible for building prompts for LLM generation.
     Handles context formatting, history integration, and template rendering.
     """
+
+    @staticmethod
+    def _get_prompt_label_from_environment() -> str:
+        """
+        Map APP_ENVIRONMENT to Langfuse prompt label
+
+        Returns:
+            Prompt label: "production" for production, "staging" for staging/development
+        """
+        return langfuse_settings.LANGFUSE_ENVIRONMENT
 
     def __init__(
         self,
@@ -41,14 +55,12 @@ class PromptBuilderService:
             langfuse_service: Optional LangfuseService for loading prompts from Langfuse
         """
         self.langfuse_service = langfuse_service
-
-        # Load prompts from Langfuse Dashboard (REQUIRED - will raise error if not available)
-        # Giống code cũ: load trong __init__
-        self.prompt_userinput = None
-        self.prompt_rag_company_info = None
-        self.prompt_rag_collection_info = None
-        self.prompt_rag_products = None
-        self.prompt_action_response = None
+        # Get prompt label based on environment
+        self.prompt_label = self._get_prompt_label_from_environment()
+        logger.info(
+            f"PromptBuilderService initialized with APP_ENVIRONMENT='{langfuse_settings.LANGFUSE_ENVIRONMENT}', "
+            f"using Langfuse prompt label='{self.prompt_label}'"
+        )
 
         if not self.langfuse_service:
             raise PromptLoadError(
@@ -60,14 +72,14 @@ class PromptBuilderService:
         try:
             self.prompt_userinput = self.langfuse_service.get_prompt(
                 "userinput_service",
-                label="production",
+                label=self.prompt_label,
                 type="text"
             )
             if not self.prompt_userinput:
                 raise PromptLoadError(
-                    "Failed to load 'userinput_service' prompt from Langfuse. "
-                    "This prompt is required for tool calling decisions (system prompt). "
-                    "Please ensure the prompt exists in Langfuse Dashboard with label 'production'."
+                    f"Failed to load 'userinput_service' prompt from Langfuse. "
+                    f"This prompt is required for tool calling decisions (system prompt). "
+                    f"Please ensure the prompt exists in Langfuse Dashboard with label '{self.prompt_label}'."
                 )
         except Exception as e:
             if isinstance(e, PromptLoadError):
@@ -81,14 +93,14 @@ class PromptBuilderService:
         try:
             self.prompt_rag_company_info = self.langfuse_service.get_prompt(
                 "rag_company_info",
-                label="production",
+                label=self.prompt_label,
                 type="text"
             )
             if not self.prompt_rag_company_info:
                 raise PromptLoadError(
-                    "Failed to load 'rag_company_info' prompt from Langfuse. "
-                    "This prompt is required for RAG generation when using search_company_info tool. "
-                    "Please ensure the prompt exists in Langfuse Dashboard with label 'production'."
+                    f"Failed to load 'rag_company_info' prompt from Langfuse. "
+                    f"This prompt is required for RAG generation when using search_company_info tool. "
+                    f"Please ensure the prompt exists in Langfuse Dashboard with label '{self.prompt_label}'."
                 )
         except Exception as e:
             if isinstance(e, PromptLoadError):
@@ -102,14 +114,14 @@ class PromptBuilderService:
         try:
             self.prompt_rag_collection_info = self.langfuse_service.get_prompt(
                 "rag_collection_info",
-                label="production",
+                label=self.prompt_label,
                 type="text"
             )
             if not self.prompt_rag_collection_info:
                 raise PromptLoadError(
-                    "Failed to load 'rag_collection_info' prompt from Langfuse. "
-                    "This prompt is required for RAG generation when using search_collection_info tool. "
-                    "Please ensure the prompt exists in Langfuse Dashboard with label 'production'."
+                    f"Failed to load 'rag_collection_info' prompt from Langfuse. "
+                    f"This prompt is required for RAG generation when using search_collection_info tool. "
+                    f"Please ensure the prompt exists in Langfuse Dashboard with label '{self.prompt_label}'."
                 )
         except Exception as e:
             if isinstance(e, PromptLoadError):
@@ -123,14 +135,14 @@ class PromptBuilderService:
         try:
             self.prompt_rag_products = self.langfuse_service.get_prompt(
                 "rag_products",
-                label="production",
+                label=self.prompt_label,
                 type="text"
             )
             if not self.prompt_rag_products:
                 raise PromptLoadError(
-                    "Failed to load 'rag_products' prompt from Langfuse. "
-                    "This prompt is required for RAG generation when using search_products tool. "
-                    "Please ensure the prompt exists in Langfuse Dashboard with label 'production'."
+                    f"Failed to load 'rag_products' prompt from Langfuse. "
+                    f"This prompt is required for RAG generation when using search_products tool. "
+                    f"Please ensure the prompt exists in Langfuse Dashboard with label '{self.prompt_label}'."
                 )
         except Exception as e:
             if isinstance(e, PromptLoadError):
@@ -144,14 +156,14 @@ class PromptBuilderService:
         try:
             self.prompt_action_response = self.langfuse_service.get_prompt(
                 "action_response_prompt",
-                label="production",
+                label=self.prompt_label,
                 type="text"
             )
             if not self.prompt_action_response:
                 raise PromptLoadError(
-                    "Failed to load 'action_response_prompt' prompt from Langfuse. "
-                    "This prompt is required for formatting responses after action tools (like add_to_cart). "
-                    "Please ensure the prompt exists in Langfuse Dashboard with label 'production'."
+                    f"Failed to load 'action_response_prompt' prompt from Langfuse. "
+                    f"This prompt is required for formatting responses after action tools (like add_to_cart). "
+                    f"Please ensure the prompt exists in Langfuse Dashboard with label '{self.prompt_label}'."
                 )
         except Exception as e:
             if isinstance(e, PromptLoadError):

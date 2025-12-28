@@ -70,12 +70,11 @@ class SummarizeService:
             # Call LLM để summary (giống code cũ)
             if self.llm_service:
                 try:
-                    # Use generate_response method (from ILLMRepository interface)
-                    # Convert to ChatMessageDTO format
-                    from app.src.application.dto.chat_dto import ChatMessageDTO
+                    # Use generate_response method (from ILLMService interface)
+                    # Create messages as dict (Domain layer doesn't import Application DTOs)
                     summary_messages = [
-                        ChatMessageDTO(role="system", content="You are a helpful assistant that summarizes conversations concisely."),
-                        ChatMessageDTO(role="user", content=summary_prompt)
+                        {"role": "system", "content": "You are a helpful assistant that summarizes conversations concisely."},
+                        {"role": "user", "content": summary_prompt}
                     ]
                     summary_response = await self.llm_service.generate_response(
                         messages=summary_messages,
