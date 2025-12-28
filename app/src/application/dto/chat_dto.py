@@ -21,20 +21,6 @@ class ChatRequestDTO(BaseModel):
     user_id: Optional[str] = Field(default=None, description="User ID for tracking")
     conversation_id: Optional[str] = Field(default=None, description="Conversation identifier")
     stream: bool = Field(default=True, description="Enable streaming response")
-
-    # Search configuration
-    top_k: int = Field(default=5, ge=1, le=20, description="Number of documents to retrieve")
-    similarity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Similarity threshold")
-    search_type: str = Field(default="hybrid", description="Search type: similarity, bm25, hybrid")
-
-    # LLM configuration
-    temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="LLM temperature")
-    max_tokens: Optional[int] = Field(default=None, ge=1, le=4096, description="Max tokens to generate")
-
-    # Filters and metadata
-    metadata_filter: Optional[Dict[str, Any]] = Field(default=None, description="Metadata filters")
-    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata")
-
     class Config:
         populate_by_name = True  # Allow both 'query' and 'question'
         json_schema_extra = {
@@ -140,19 +126,6 @@ class WSChatMessageDTO(BaseModel):
     user_id: Optional[str] = Field(default=None, description="User ID")
     conversation_id: Optional[str] = Field(default=None, description="Conversation identifier")
     stream: bool = Field(default=True, description="Enable streaming response (true for streaming, false for non-streaming)")
-
-    # Search configuration
-    top_k: Optional[int] = Field(default=5, ge=1, le=20, description="Number of documents to retrieve")
-    similarity_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Similarity threshold")
-    search_type: Optional[str] = Field(default="hybrid", description="Search type")
-
-    # LLM configuration
-    temperature: Optional[float] = Field(default=0.7, ge=0.0, le=2.0, description="LLM temperature")
-    max_tokens: Optional[int] = Field(default=None, ge=1, le=4096, description="Max tokens")
-
-    # Filters
-    metadata_filter: Optional[Dict[str, Any]] = Field(default=None, description="Metadata filters")
-
     class Config:
         populate_by_name = True  # Allow both 'query' and 'question'
         json_schema_extra = {
