@@ -3,8 +3,8 @@ Health Check Use Case
 """
 import time
 from typing import List
-from ..interfaces.health_repository import IHealthRepository
-from ..dto.health_dto import (
+from app.src.application.interfaces.services.health_interface import IHealthService
+from app.src.application.dto.health_dto import (
     HealthCheckResponseDTO,
     ReadinessCheckResponseDTO,
     ServiceHealthDTO,
@@ -24,7 +24,7 @@ class HealthCheckUseCase:
 
     def __init__(
         self,
-        health_repository: IHealthRepository,
+        health_service: IHealthService,
         service_name: str = "Ceramic Tiles Chatbot",
         version: str = "1.0.0"
     ):
@@ -32,11 +32,11 @@ class HealthCheckUseCase:
         Initialize health check use case
 
         Args:
-            health_repository: Health repository
+            health_service: Health service
             service_name: Service name
             version: Service version
         """
-        self.health_repository = health_repository
+        self.health_service = health_service
         self.service_name = service_name
         self.version = version
         self.start_time = time.time()
@@ -49,14 +49,14 @@ class HealthCheckUseCase:
             Health check response DTO
         """
         # Get system metrics
-        metrics = await self.health_repository.get_system_metrics()
+        metrics = await self.health_service.get_system_metrics()
 
         # Check all services
         services: List[ServiceHealthDTO] = []
 
         # Database
         try:
-            db_health = await self.health_repository.check_database_health()
+            db_health = await self.health_service.check_database_health()
             services.append(db_health)
         except Exception as e:
             services.append(ServiceHealthDTO(
@@ -67,7 +67,7 @@ class HealthCheckUseCase:
 
         # Redis
         try:
-            redis_health = await self.health_repository.check_redis_health()
+            redis_health = await self.health_service.check_redis_health()
             services.append(redis_health)
         except Exception as e:
             services.append(ServiceHealthDTO(
@@ -78,7 +78,7 @@ class HealthCheckUseCase:
 
         # Milvus
         try:
-            milvus_health = await self.health_repository.check_milvus_health()
+            milvus_health = await self.health_service.check_milvus_health()
             services.append(milvus_health)
         except Exception as e:
             services.append(ServiceHealthDTO(
@@ -89,7 +89,7 @@ class HealthCheckUseCase:
 
         # LLM
         try:
-            llm_health = await self.health_repository.check_llm_health()
+            llm_health = await self.health_service.check_llm_health()
             services.append(llm_health)
         except Exception as e:
             services.append(ServiceHealthDTO(
@@ -100,7 +100,7 @@ class HealthCheckUseCase:
 
         # Embedding
         try:
-            embedding_health = await self.health_repository.check_embedding_health()
+            embedding_health = await self.health_service.check_embedding_health()
             services.append(embedding_health)
         except Exception as e:
             services.append(ServiceHealthDTO(
@@ -136,7 +136,7 @@ class HealthCheckUseCase:
 
         # Check Redis
         try:
-            redis_health = await self.health_repository.check_redis_health()
+            redis_health = await self.health_service.check_redis_health()
             if redis_health.status == HealthStatus.HEALTHY:
                 ready_services.append("redis")
             else:
@@ -146,7 +146,7 @@ class HealthCheckUseCase:
 
         # Check Milvus
         try:
-            milvus_health = await self.health_repository.check_milvus_health()
+            milvus_health = await self.health_service.check_milvus_health()
             if milvus_health.status == HealthStatus.HEALTHY:
                 ready_services.append("milvus")
             else:
@@ -156,7 +156,7 @@ class HealthCheckUseCase:
 
         # Check LLM
         try:
-            llm_health = await self.health_repository.check_llm_health()
+            llm_health = await self.health_service.check_llm_health()
             if llm_health.status == HealthStatus.HEALTHY:
                 ready_services.append("llm")
             else:
