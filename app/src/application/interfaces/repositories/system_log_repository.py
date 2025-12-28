@@ -3,7 +3,7 @@ System Log Repository Interface
 """
 from abc import ABC, abstractmethod
 from typing import List, Optional
-from ..dto.system_log_dto import (
+from app.src.application.dto.system_log_dto import (
     SystemLogCreateDTO,
     SystemLogDTO,
     SystemLogQueryDTO,
